@@ -1,0 +1,106 @@
+import { useState, useEffect } from "react"; // Added hooks
+import { useAuth } from "../context/AuthContext";
+import { db } from "../lib/firebase"; // Added db
+import { doc, onSnapshot } from "firebase/firestore"; // Added firestore functions
+import { Link, useLocation } from "react-router-dom";
+import { Layout, Trophy, ShoppingBag, LogOut, User } from "lucide-react";
+
+export default function Navbar() {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  
+  // New State for Live Stats
+  const [stats, setStats] = useState({ currency: 0, xp: 0, displayName: "" });
+
+  // Real-time Listener
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const unsub = onSnapshot(doc(db, "users", user.uid), (docSnapshot) => {
+        if (docSnapshot.exists()) {
+            const data = docSnapshot.data();
+            setStats({
+                currency: data.currency || 0,
+                xp: data.xp || 0,
+                displayName: data.displayName || user.displayName // Fallback to Auth name
+            });
+        }
+    });
+
+    return () => unsub();
+  }, [user]);
+
+  if (!user) return null;
+
+  const isActive = (path) => location.pathname === path ? "bg-indigo-100 text-indigo-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900";
+
+  return (
+    <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
+      <div className="max-w-6xl mx-auto px-4">
+        <div className="flex justify-between items-center h-16">
+          
+          {/* LEFT: BRANDING */}
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-2">
+                <div className="bg-indigo-600 text-white p-1.5 rounded-lg font-bold">DA</div>
+                <span className="font-extrabold text-slate-800 tracking-tight text-lg">DREAM AGENCY</span>
+            </div>
+
+            {/* CENTER: NAVIGATION LINKS */}
+            <div className="hidden md:flex items-center gap-1">
+                <Link to="/dashboard" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/dashboard')}`}>
+                    <Layout size={18}/> Dashboard
+                </Link>
+                <Link to="/leaderboard" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/leaderboard')}`}>
+                    <Trophy size={18}/> Leaderboard
+                </Link>
+                <Link to="/shop" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/shop')}`}>
+                    <ShoppingBag size={18}/> Agency Store
+                </Link>
+            </div>
+          </div>
+
+          {/* RIGHT: USER PROFILE */}
+          <div className="flex items-center gap-4">
+            
+            {/* STATS PILL (Now using 'stats' state) */}
+            <div className="hidden sm:flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
+                <div className="text-sm font-bold text-green-600 flex items-center gap-1">
+                    $ {stats.currency}
+                </div>
+                <div className="w-px h-4 bg-slate-300"></div>
+                <div className="text-sm font-bold text-indigo-600 flex items-center gap-1">
+                    {stats.xp} XP
+                </div>
+            </div>
+
+            {/* AVATAR & DROPDOWN */}
+            <div className="flex items-center gap-3 pl-3 border-l border-slate-100">
+                <div className="text-right hidden lg:block">
+                    <p className="text-sm font-bold text-slate-900 leading-none">{stats.displayName}</p>
+                    <p className="text-xs text-slate-500 mt-1">Junior Agent</p>
+                </div>
+                
+                {user.photoURL ? (
+                    <img 
+                        src={user.photoURL} 
+                        alt="Profile" 
+                        className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
+                    />
+                ) : (
+                    <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">
+                        <User size={20}/>
+                    </div>
+                )}
+
+                <button onClick={logout} className="text-slate-400 hover:text-red-500 transition ml-2" title="Sign Out">
+                    <LogOut size={20}/>
+                </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </nav>
+  );
+}
