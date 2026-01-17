@@ -14,6 +14,8 @@ import CreateContract from "./pages/admin/CreateContract";
 import AllContracts from "./pages/admin/AllContracts";
 import EditContract from "./pages/admin/EditContract";
 import Leaderboard from "./pages/Leaderboard";
+import AdminRoster from "./pages/admin/AdminRoster";
+import AdminAnalytics from "./pages/admin/AdminAnalytics";
 
 // ----------------------------------------------------
 // Protected Route Logic
@@ -60,6 +62,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/admin/contracts" element={<AllContracts />} />
 <Route path="/admin/edit/:id" element={<EditContract />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route path="/admin/roster" element={<AdminRoster />} />
+        <Route path="/admin/analytics" element={<AdminAnalytics />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

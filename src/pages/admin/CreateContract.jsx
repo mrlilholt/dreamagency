@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Save, Layout, ArrowLeft, Plus, Trash } from "lucide-react";
 // 1. Import your config
 import { CLASS_CODES } from "../../lib/gameConfig"; 
+import AdminNavbar from "../../components/AdminNavbar";
 
 export default function CreateContract() {
   const navigate = useNavigate();
@@ -77,6 +78,7 @@ export default function CreateContract() {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
+        <AdminNavbar />
       <button onClick={() => navigate('/admin/contracts')} className="flex items-center text-slate-500 mb-6 hover:text-slate-800">
             <ArrowLeft size={18} className="mr-2"/> Back to Library
       </button>

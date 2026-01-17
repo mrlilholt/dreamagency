@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { db } from "../../lib/firebase";
 import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { Folder, Edit, Trash, ArrowLeft, Plus } from "lucide-react";
+import AdminNavbar from "../../components/AdminNavbar";
 
 export default function AllContracts() {
   const navigate = useNavigate();
@@ -38,6 +39,7 @@ export default function AllContracts() {
 
   return (
     <div className="max-w-6xl mx-auto p-6">
+        <AdminNavbar />
         {/* HEADER */}
         <div className="flex justify-between items-center mb-8">
             <div className="flex items-center gap-4">
@@ -48,12 +50,7 @@ export default function AllContracts() {
                     <Folder className="text-indigo-600" /> Contract Library
                 </h1>
             </div>
-            <button 
-                onClick={() => navigate('/admin/create')} 
-                className="bg-black text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-slate-800 transition"
-            >
-                <Plus size={18}/> New Contract
-            </button>
+           
         </div>
 
         {/* CONTRACTS GRID (Grouped) */}
