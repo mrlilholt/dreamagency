@@ -1,33 +1,75 @@
 import { useEffect, useState } from "react";
 import { db } from "../lib/firebase";
-import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
-import Navbar from "../components/Navbar"; // Import the Navbar we just made
-import { Trophy, Medal, Crown } from "lucide-react";
+import { collection, onSnapshot } from "firebase/firestore";
+import Navbar from "../components/Navbar"; 
+import { Trophy, Medal, Crown, Zap, LayoutList, Rocket } from "lucide-react";
 
 export default function Leaderboard() {
-  const [leaders, setLeaders] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("OVERALL");
 
   useEffect(() => {
-    const fetchLeaders = async () => {
-      try {
-        const q = query(collection(db, "users"), orderBy("xp", "desc"), limit(20));
-        const querySnapshot = await getDocs(q);
-        const usersData = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
-        setLeaders(usersData);
-      } catch (error) {
-        console.error("Error fetching leaderboard:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // 1. Listen to Users (Real-time)
+    const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
+        setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
 
-    fetchLeaders();
+    // 2. Listen to Active Jobs (Real-time)
+    const unsubJobs = onSnapshot(collection(db, "active_jobs"), (snap) => {
+        setJobs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLoading(false);
+    });
+
+    return () => {
+        unsubUsers();
+        unsubJobs();
+    };
   }, []);
 
+  // --- LOGIC ---
+  const contractTitles = Array.from(new Set(jobs.map(j => j.contract_title))).sort();
+
+  const getRankings = () => {
+    if (activeTab === "OVERALL") {
+        return [...users]
+            .filter(u => u.xp > 0)
+            .sort((a, b) => (b.xp || 0) - (a.xp || 0))
+            .slice(0, 50);
+    } else {
+        const relevantJobs = jobs.filter(j => j.contract_title === activeTab);
+        return relevantJobs
+            .map(job => {
+                const student = users.find(u => u.id === job.student_id);
+                if (!student) return null;
+                return {
+                    ...student,
+                    rankingMetric: job.current_stage, 
+                    jobId: job.id
+                };
+            })
+            .filter(item => item !== null)
+            // Sort by Stage Descending, then by XP Descending (Tie breaker)
+            .sort((a, b) => {
+                if (b.rankingMetric !== a.rankingMetric) {
+                    return b.rankingMetric - a.rankingMetric;
+                }
+                return (b.xp || 0) - (a.xp || 0);
+            });
+    }
+  };
+
+  const rankings = getRankings();
+
+  // --- HELPER: ROBUST NAME FINDER ---
+  const getName = (u) => {
+    if (u.name) return u.name;
+    if (u.displayName) return u.displayName;
+    return "Unknown Agent";
+  };
+
+  // --- HELPER: ICONS ---
   const getRankIcon = (index) => {
     if (index === 0) return <Crown className="text-yellow-500 fill-yellow-500" size={24} />;
     if (index === 1) return <Medal className="text-slate-400 fill-slate-400" size={24} />;
@@ -36,62 +78,82 @@ export default function Leaderboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar /> {/* The Agency Header */}
-
+    <div className="min-h-screen bg-slate-50 pb-20">
+      <Navbar />
       <div className="max-w-4xl mx-auto p-6">
         <div className="text-center mb-10">
-            <h1 className="text-4xl font-extrabold text-slate-900 mb-2">Top Performers</h1>
-            <p className="text-slate-500">The highest earning agents in the agency.</p>
+            <h1 className="text-4xl font-extrabold text-slate-900 mb-2 flex justify-center items-center gap-3">
+                <Trophy className="text-yellow-500" /> Agency Leaderboards
+            </h1>
+            <p className="text-slate-500">Live rankings from the agency database.</p>
         </div>
 
-        {loading ? (
-             <div className="text-center py-20 text-slate-400">Loading rankings...</div>
-        ) : (
-            <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-                {leaders.map((agent, index) => (
-                    <div 
-                        key={agent.id} 
-                        className={`flex items-center justify-between p-6 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition ${
-                            index < 3 ? "bg-gradient-to-r from-white to-slate-50" : ""
-                        }`}
-                    >
-                        <div className="flex items-center gap-6">
-                            {/* RANK */}
-                            <div className="w-10 flex justify-center">
-                                {getRankIcon(index)}
+        {/* TABS */}
+        <div className="flex gap-2 overflow-x-auto pb-4 mb-6 custom-scrollbar">
+            <button
+                onClick={() => setActiveTab("OVERALL")}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-sm whitespace-nowrap transition-all ${
+                    activeTab === "OVERALL" ? "bg-slate-900 text-white shadow-lg" : "bg-white text-slate-500 border border-slate-200"
+                }`}
+            >
+                <Zap size={16} className={activeTab === "OVERALL" ? "fill-white" : ""} /> Overall XP
+            </button>
+            {contractTitles.map(title => (
+                <button
+                    key={title}
+                    onClick={() => setActiveTab(title)}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-sm whitespace-nowrap transition-all ${
+                        activeTab === title ? "bg-indigo-600 text-white shadow-lg" : "bg-white text-slate-500 border border-slate-200"
+                    }`}
+                >
+                    <LayoutList size={16} /> {title}
+                </button>
+            ))}
+        </div>
+
+        {/* LIST */}
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 min-h-[400px]">
+            {rankings.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+                    <Rocket size={48} className="mb-4 opacity-20"/>
+                    <p>No active agents found for this category.</p>
+                </div>
+            ) : (
+                rankings.map((agent, index) => (
+                    <div key={agent.id || agent.jobId} className="flex items-center justify-between p-5 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition">
+                        <div className="flex items-center gap-5">
+                            <div className="w-10 flex justify-center">{getRankIcon(index)}</div>
+                            
+                            {/* Avatar Initials */}
+                            <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-500 border border-slate-200 uppercase">
+                                {getName(agent).charAt(0)}
                             </div>
-
-                            {/* AVATAR */}
-                            {agent.photoURL ? (
-                                <img src={agent.photoURL} alt={agent.displayName} className="w-12 h-12 rounded-full border border-slate-200" />
-                            ) : (
-                                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-500">
-                                    {agent.displayName?.charAt(0)}
-                                </div>
-                            )}
-
-                            {/* NAME */}
+                            
+                            {/* Agent Name */}
                             <div>
-                                <h3 className="font-bold text-slate-800 text-lg">
-                                    {agent.displayName}
-                                    {index === 0 && <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full border border-yellow-200">Top Agent</span>}
+                                <h3 className="font-bold text-slate-800">
+                                    {getName(agent)}
                                 </h3>
-                                <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
-                                    {agent.class_id ? agent.class_id.replace('_', ' ') : 'Freelancer'}
-                                </p>
+                                {index === 0 && activeTab === "OVERALL" && (
+                                    <span className="text-[10px] bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-bold">
+                                        TOP AGENT
+                                    </span>
+                                )}
                             </div>
                         </div>
-
-                        {/* XP SCORE */}
+                        
+                        {/* Score Display */}
                         <div className="text-right">
-                            <span className="block text-2xl font-black text-indigo-600">{agent.xp?.toLocaleString()} XP</span>
-                            <span className="text-xs text-slate-400 font-bold">LIFETIME EARNINGS</span>
+                            {activeTab === "OVERALL" ? (
+                                <span className="block text-xl font-black text-slate-900">{agent.xp?.toLocaleString()} XP</span>
+                            ) : (
+                                <span className="block text-xl font-black text-indigo-600">Stage {agent.rankingMetric}</span>
+                            )}
                         </div>
                     </div>
-                ))}
-            </div>
-        )}
+                ))
+            )}
+        </div>
       </div>
     </div>
   );

@@ -57,6 +57,9 @@ export default function Navbar() {
                 <Link to="/shop" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/shop')}`}>
                     <ShoppingBag size={18}/> Agency Store
                 </Link>
+                <Link to="/profile" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/profile')}`}>
+                    <User size={18}/> Agent Profile
+                </Link>
             </div>
           </div>
 

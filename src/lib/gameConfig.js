@@ -33,3 +33,27 @@ export const INITIAL_STATS = {
   level: 1,
   reputation: 100
 };
+export const BADGES = {
+  first_contract: {
+    id: "first_contract",
+    title: "Rookie No More",
+    description: "Completed your first contract.",
+    icon: "🚀",
+    color: "bg-blue-500"
+  },
+  rich_list: {
+    id: "rich_list",
+    title: "Capitalist",
+    description: "Accumulated over $5,000 in agency funds.",
+    icon: "💰",
+    color: "bg-green-500"
+  },
+  stage_master: {
+    id: "stage_master",
+    title: "Reliable",
+    description: "Reached Stage 5 on any contract.",
+    icon: "⭐",
+    color: "bg-indigo-500"
+  }
+  // Add more as you invent them!
+};

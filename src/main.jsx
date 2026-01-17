@@ -16,7 +16,8 @@ import EditContract from "./pages/admin/EditContract";
 import Leaderboard from "./pages/Leaderboard";
 import AdminRoster from "./pages/admin/AdminRoster";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
-
+import NotificationLayer from "./components/NotificationLayer";
+import AgentProfile from "./pages/AgentProfile";
 // ----------------------------------------------------
 // Protected Route Logic
 // ----------------------------------------------------
@@ -39,6 +40,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AuthProvider>
       <BrowserRouter>
+            <NotificationLayer />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/onboarding" element={<Onboarding />} />
@@ -50,20 +52,21 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           } />
 
           {/* FIX 2: Add the Route definition here */}
-          <Route path="/contract/:id" element={
+        <Route path="/contract/:id" element={
             <PrivateRoute>
               <ContractDetails />
             </PrivateRoute>
           } />
-          <Route path="/shop" element={<RewardsShop />} />
-          <Route path="/admin/create" element={<CreateContract />} />
+        <Route path="/shop" element={<RewardsShop />} />
+        <Route path="/admin/create" element={<CreateContract />} />
           {/* Catch-all redirect */}
-          <Route path="*" element={<Navigate to="/dashboard" />} />
-          <Route path="/admin/contracts" element={<AllContracts />} />
-<Route path="/admin/edit/:id" element={<EditContract />} />
+        <Route path="*" element={<Navigate to="/dashboard" />} />
+        <Route path="/admin/contracts" element={<AllContracts />} />
+        <Route path="/admin/edit/:id" element={<EditContract />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/admin/roster" element={<AdminRoster />} />
         <Route path="/admin/analytics" element={<AdminAnalytics />} />
+        <Route path="/profile" element={<AgentProfile />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
