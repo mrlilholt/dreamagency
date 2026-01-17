@@ -7,7 +7,7 @@ import {
     getDoc, 
     updateDoc, 
     serverTimestamp, 
-    onSnapshot // <--- IMPORT THIS
+    onSnapshot 
 } from "firebase/firestore";
 import { 
     ArrowLeft, 
@@ -18,12 +18,13 @@ import {
     FileText, 
     DollarSign, 
     Zap, 
-    AlertCircle 
+    AlertCircle,
+    TrendingUp
 } from "lucide-react";
-
+import Navbar from "../components/Navbar";
 
 export default function ContractDetails() {
-  const { id } = useParams(); // This is the Contract ID (e.g. 'contract_123')
+  const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -31,8 +32,8 @@ export default function ContractDetails() {
   const [activeJob, setActiveJob] = useState(null);
   const [submissionLink, setSubmissionLink] = useState("");
   const [loading, setLoading] = useState(true);
-const [showConfetti, setShowConfetti] = useState(false);
-  // 1. Fetch the STATIC Contract Details (Title, Description, etc.)
+
+  // 1. Fetch Contract Static Info
   useEffect(() => {
     const fetchContract = async () => {
         if (!id) return;
@@ -41,242 +42,277 @@ const [showConfetti, setShowConfetti] = useState(false);
         if (snap.exists()) {
             setContract({ id: snap.id, ...snap.data() });
         }
+        setLoading(false);
     };
     fetchContract();
   }, [id]);
 
-  // 2. LISTEN to the ACTIVE JOB Status (Live Updates)
+  // 2. Listen for User's Progress
   useEffect(() => {
-    if (!user?.uid || !id) return;
-
-    // We need to find the specific 'active_jobs' document for this user & contract.
-    // Since IDs are usually generated, we might know the ID if we created it deterministically,
-    // OR we can query it. For simplicity, assuming you store the active_job ID or use a deterministic ID:
-    // Ideally, active_jobs ID = `${user.uid}_${contractId}`
-    const jobId = `${user.uid}_${id}`;
-    const jobRef = doc(db, "active_jobs", jobId);
-
-    const unsubscribe = onSnapshot(jobRef, (docSnap) => {
+    if (!user || !id) return;
+    const jobRef = doc(db, "active_jobs", `${user.uid}_${id}`);
+    const unsub = onSnapshot(jobRef, (docSnap) => {
         if (docSnap.exists()) {
-            setActiveJob({ id: docSnap.id, ...docSnap.data() });
+            setActiveJob(docSnap.data());
         } else {
             setActiveJob(null);
         }
-        setLoading(false);
     });
-
-    return () => unsubscribe();
+    return () => unsub();
   }, [user, id]);
-
 
   // --- ACTIONS ---
 
   const startContract = async () => {
-    if (!user || !contract) return;
+    if (!contract) return;
     
-    // Create the ID deterministically so we can listen to it easily
-    const jobId = `${user.uid}_${contract.id}`; 
-    
-    const newJob = {
-        contract_id: contract.id,
+    // Using setDoc to ensure it creates correctly
+    const { setDoc } = await import("firebase/firestore");
+    await setDoc(doc(db, "active_jobs", `${user.uid}_${id}`), {
+        student_id: user.uid,
+        student_name: user.displayName || user.email,
+        contract_id: id,
         contract_title: contract.title,
         contract_bounty: contract.bounty,
         contract_xp: contract.xp_reward,
-        student_id: user.uid,
-        student_name: user.displayName || "Unknown Agent",
         status: "in_progress",
-        current_stage: 1,
-        stages: contract.stages, // Copy stages structure
         started_at: serverTimestamp(),
-        last_updated: serverTimestamp()
-    };
-
-    await updateDoc(doc(db, "users", user.uid), {
-        active_contracts: { [contract.id]: true } // Simple tracking
+        current_stage: 1,
+        stages: {
+            1: { name: "Research & Ideate", req: "Submit 3 sketches and research links.", status: "pending" },
+            2: { name: "Proposal", req: "Submit a 1-paragraph proposal.", status: "locked" },
+            3: { name: "Prototype", req: "Submit photo/link of first build.", status: "locked" },
+            4: { name: "Test", req: "Submit testing data/feedback notes.", status: "locked" },
+            5: { name: "Iterate", req: "What changes did you make based on data?", status: "locked" },
+            6: { name: "Deliver & Reflect", req: "Final project link and reflection.", status: "locked" }
+        }
     });
-    
-    // Use setDoc to create with a specific ID
-    const { setDoc } = await import("firebase/firestore"); 
-    await setDoc(doc(db, "active_jobs", jobId), newJob);
   };
 
   const submitStage = async (stageNum) => {
     if (!submissionLink) return alert("Please add a link!");
     
-    const updatedStages = { ...activeJob.stages };
-    updatedStages[stageNum] = {
-        ...updatedStages[stageNum],
-        status: "completed", // Temporarily mark as done step locally
-        submission_content: submissionLink,
-        submitted_at: new Date().toISOString()
-    };
-
-    const jobRef = doc(db, "active_jobs", activeJob.id);
+    const jobRef = doc(db, "active_jobs", `${user.uid}_${id}`);
+    
     await updateDoc(jobRef, {
-        status: "pending_review",
-        stages: updatedStages,
-        last_updated: serverTimestamp()
+        [`stages.${stageNum}.status`]: "pending_review",
+        [`stages.${stageNum}.submission_content`]: submissionLink,
+        [`stages.${stageNum}.submitted_at`]: new Date().toISOString(),
+        status: "pending_review" 
     });
+    
     setSubmissionLink("");
+    alert("Stage submitted for review!");
   };
 
-  if (!contract) return <div className="p-10 text-center"><div className="animate-spin inline-block w-8 h-8 border-4 border-indigo-500 rounded-full border-t-transparent"></div></div>;
+  // --- RENDER ---
 
-  const currentStageNum = activeJob ? activeJob.current_stage : 1;
-  // If job is finished, cap it
-  const displayStage = activeJob?.status === 'completed' ? 99 : currentStageNum;
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading Mission...</div>;
+  if (!contract) return <div className="min-h-screen flex items-center justify-center">Mission Data Not Found.</div>;
+
+  const isStarted = !!activeJob;
+  const currentStageNum = activeJob?.current_stage || 1;
+  
+  // Calculate Totals to show the massive incentive
+  const totalStages = 6;
+  const totalPotentialMoney = (contract.bounty || 0) * totalStages;
+  const totalPotentialXP = (contract.xp_reward || 0) * totalStages;
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
-        <button onClick={() => navigate('/dashboard')} className="flex items-center text-slate-500 hover:text-slate-800 mb-6 transition">
-            <ArrowLeft size={18} className="mr-1"/> Back to Dashboard
+    <div className="min-h-screen bg-slate-50 pb-20">
+      <Navbar /> 
+
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        
+        <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 mb-6 transition">
+            <ArrowLeft size={18} /> Back to Dashboard
         </button>
 
         {/* HEADER CARD */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-8 flex justify-between items-start">
-            <div>
-                <h1 className="text-3xl font-extrabold text-slate-900 mb-2">{contract.title}</h1>
-                <p className="text-slate-500 text-lg max-w-2xl">{contract.description}</p>
-            </div>
-            <div className="text-right">
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-2">
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Total Value</p>
-                    <div className="flex items-center gap-3 text-xl font-bold">
-                        <span className="text-green-600 flex items-center"><DollarSign size={20}/>{contract.bounty}</span>
-                        <span className="text-indigo-600 flex items-center"><Zap size={20}/>{contract.xp_reward} XP</span>
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+            <div className="bg-slate-900 p-8 text-white relative overflow-hidden">
+                <div className="relative z-10">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <span className="inline-block bg-indigo-500 text-white text-xs font-bold px-2 py-1 rounded mb-3">
+                                {contract.category || "Classified"}
+                            </span>
+                            <h1 className="text-3xl font-black mb-2">{contract.title}</h1>
+                        </div>
+                        
+                        {/* TOTAL VALUE BADGE */}
+                        <div className="text-right hidden sm:block">
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Total Contract Value</p>
+                            <div className="flex items-center gap-3 justify-end">
+                                <span className="text-2xl font-black text-green-400 flex items-center gap-1">
+                                    <DollarSign size={20} className="text-green-500" />{totalPotentialMoney}
+                                </span>
+                                <span className="text-xl font-bold text-indigo-400 flex items-center gap-1">
+                                    <Zap size={18} className="text-indigo-500" />{totalPotentialXP}
+                                </span>
+                            </div>
+                        </div>
                     </div>
+
+                    {/* PER STAGE PAYOUTS */}
+                    <div className="flex flex-wrap items-center gap-6 mt-4 pt-4 border-t border-slate-800">
+                        <div className="flex items-center gap-2">
+                             <div className="bg-green-500/10 p-2 rounded-lg">
+                                <DollarSign size={18} className="text-green-400"/> 
+                             </div>
+                             <div>
+                                 <span className="block text-lg font-bold text-white leading-none">${contract.bounty}</span>
+                                 <span className="text-xs text-slate-400 uppercase font-bold">Payout Per Stage</span>
+                             </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                             <div className="bg-indigo-500/10 p-2 rounded-lg">
+                                <Zap size={18} className="text-indigo-400"/> 
+                             </div>
+                             <div>
+                                 <span className="block text-lg font-bold text-white leading-none">{contract.xp_reward} XP</span>
+                                 <span className="text-xs text-slate-400 uppercase font-bold">XP Per Stage</span>
+                             </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                             <div className="bg-slate-700/50 p-2 rounded-lg">
+                                <TrendingUp size={18} className="text-slate-300"/> 
+                             </div>
+                             <div>
+                                 <span className="block text-lg font-bold text-white leading-none">6 Stages</span>
+                                 <span className="text-xs text-slate-400 uppercase font-bold">Milestones</span>
+                             </div>
+                        </div>
+                    </div>
+
                 </div>
-                {activeJob && (
-                    <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-100 text-green-800 text-sm font-bold text-center">
-                        Earned So Far <br/>
-                        ${Math.floor((contract.bounty / Object.keys(contract.stages).length) * (currentStageNum - 1))} / ${contract.bounty}
+                
+                {/* Decoration */}
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                    <FileText size={120} />
+                </div>
+            </div>
+            
+            <div className="p-8">
+                <h3 className="font-bold text-slate-900 mb-2">Mission Brief</h3>
+                <p className="text-slate-600 leading-relaxed mb-8">{contract.description}</p>
+
+                {/* START BUTTON */}
+                {!isStarted && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
+                        <p className="text-slate-500 mb-4 text-sm font-medium">
+                            Ready to begin? This mission pays <strong>${contract.bounty}</strong> upon completion of <strong>each stage</strong>.
+                        </p>
+                        <button 
+                            onClick={startContract}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-xl transition shadow-lg shadow-indigo-200"
+                        >
+                            Accept Mission
+                        </button>
                     </div>
                 )}
             </div>
         </div>
 
-        {/* MAIN CONTENT GRID */}
-        {!activeJob ? (
-            // NOT STARTED STATE
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
-                <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <FileText size={40}/>
-                </div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Ready to accept this mission?</h2>
-                <p className="text-slate-500 mb-8 max-w-md mx-auto">
-                    You will need to complete {Object.keys(contract.stages).length} stages to earn the full reward.
-                </p>
-                <button onClick={startContract} className="bg-indigo-600 text-white text-lg font-bold px-8 py-4 rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">
-                    Accept Contract
-                </button>
-            </div>
-        ) : (
-            // ACTIVE STATE
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* STAGES VIEW (Only if Started) */}
+        {isStarted && (
+            <div>
+                <h3 className="text-lg font-black text-slate-800 mb-4 px-2 flex justify-between items-center">
+                    <span>Project Milestones</span>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        Stage {currentStageNum} of 6
+                    </span>
+                </h3>
                 
-                {/* LEFT: PROGRESS LIST */}
-                <div className="lg:col-span-1 space-y-3">
-                    {Object.entries(contract.stages).map(([num, stage]) => {
-                        const stageIndex = parseInt(num);
-                        const isCompleted = stageIndex < displayStage;
-                        const isCurrent = stageIndex === displayStage;
-                        const isLocked = stageIndex > displayStage;
+                <div className="space-y-4">
+                    {Object.entries(activeJob.stages || {}).map(([num, stage]) => {
+                        const isCurrent = parseInt(num) === currentStageNum;
+                        const isLocked = parseInt(num) > currentStageNum;
+                        const isCompleted = stage.status === 'approved'; 
+                        const isPending = stage.status === 'pending_review';
+                        const isRejected = stage.status === 'returned';
 
                         return (
-                            <div key={num} className={`p-4 rounded-xl border transition-all flex items-center gap-3 ${
-                                isCurrent ? "bg-indigo-50 border-indigo-200 ring-2 ring-indigo-100" : 
-                                isCompleted ? "bg-green-50 border-green-200" : 
-                                "bg-white border-slate-100 opacity-60"
-                            }`}>
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                                    isCurrent ? "bg-indigo-600 text-white" : 
-                                    isCompleted ? "bg-green-600 text-white" : 
-                                    "bg-slate-200 text-slate-400"
-                                }`}>
-                                    {isCompleted ? <CheckCircle size={16}/> : 
-                                     isLocked ? <Lock size={14}/> : 
-                                     <div className="w-2 h-2 bg-white rounded-full"/>}
-                                </div>
-                                <span className={`font-bold ${isCurrent ? "text-indigo-900" : isCompleted ? "text-green-900" : "text-slate-400"}`}>
-                                    {stage.name}
-                                </span>
-                            </div>
-                        )
-                    })}
-                </div>
-
-                {/* RIGHT: CURRENT STAGE ACTION */}
-                <div className="lg:col-span-2">
-{activeJob.status === 'completed' || !contract.stages[currentStageNum] ? (                         <div className="bg-green-600 text-white p-12 rounded-2xl text-center shadow-lg">
-                            <CheckCircle size={64} className="mx-auto mb-4 text-green-200" />
-                            <h2 className="text-3xl font-bold mb-2">Mission Accomplished!</h2>
-                            <p className="text-green-100 text-lg">You have completed all stages and earned full rewards.</p>
-                         </div>
-                    ) : (
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-                            <div className="mb-6">
-                                <span className="text-indigo-600 font-bold tracking-wider text-xs uppercase mb-2 block">Stage {currentStageNum}</span>
-                                <h2 className="text-3xl font-bold text-slate-900 mb-4">{contract.stages[currentStageNum].name}</h2>
+                            <div key={num} className={`bg-white border rounded-xl p-6 transition-all ${
+                                isCurrent ? "border-indigo-500 ring-4 ring-indigo-50 shadow-lg" : "border-slate-200 opacity-60"
+                            } ${isLocked ? "grayscale bg-slate-50" : ""}`}>
                                 
-                                <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 mb-6">
-                                    <h3 className="font-bold text-slate-700 mb-2">Deliverable Required:</h3>
-                                    <p className="text-slate-600">{contract.stages[currentStageNum].req}</p>
-                                </div>
-                            </div>
-
-                            {/* DYNAMIC ACTION AREA */}
-                            {activeJob.status === 'pending_review' ? (
-                                <div className="bg-yellow-50 border border-yellow-100 p-8 rounded-xl text-center animate-in fade-in">
-                                    <Clock className="mx-auto text-yellow-500 mb-3" size={40} />
-                                    <h3 className="text-xl font-bold text-yellow-800 mb-1">In Review</h3>
-                                    <p className="text-yellow-700">The Creative Director is reviewing your work.</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                     {/* REJECTION ALERT (UPDATED) */}
-                                     {activeJob.stages?.[currentStageNum]?.status === 'rejected' && (
-                                        <div className="bg-red-50 border border-red-200 p-6 rounded-xl flex gap-4 items-start animate-pulse">
-                                            <div className="bg-white p-2 rounded-full shadow-sm text-red-500 shrink-0">
-                                                <AlertCircle size={24} />
-                                            </div>
-                                            <div>
-                                                <h4 className="font-bold text-red-800 text-lg">Action Required</h4>
-                                                <p className="text-red-700 mt-1">
-                                                    "{activeJob.stages[currentStageNum].feedback}"
-                                                </p>
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                                            isCompleted ? "bg-green-100 text-green-600" : 
+                                            isCurrent ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-500"
+                                        }`}>
+                                            {isCompleted ? <CheckCircle size={16}/> : num}
+                                        </div>
+                                        <div>
+                                            <h4 className={`font-bold ${isCurrent ? "text-indigo-900" : "text-slate-700"}`}>{stage.name}</h4>
+                                            
+                                            {/* Status Badges */}
+                                            <div className="flex items-center gap-2 mt-1">
+                                                {isRejected && <span className="text-xs font-bold text-red-600 flex items-center gap-1"><AlertCircle size={12}/> Returned for edits</span>}
+                                                {isPending && <span className="text-xs font-bold text-yellow-600 flex items-center gap-1"><Clock size={12}/> Under Review</span>}
+                                                {isCompleted && <span className="text-xs font-bold text-green-600 flex items-center gap-1">PAID: ${contract.bounty}</span>}
                                             </div>
                                         </div>
-                                    )}
-
-                                    <div className="space-y-2">
-                                        <label className="block font-bold text-slate-700">Proof of Work (Link)</label>
-                                        <input 
-                                            className="w-full border border-slate-300 p-4 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                                            placeholder="https://docs.google.com/..."
-                                            value={submissionLink}
-                                            onChange={(e) => setSubmissionLink(e.target.value)}
-                                        />
-                                        <p className="text-xs text-slate-400">Paste a link to your Google Doc, Slide, or Image.</p>
                                     </div>
-
-                                    <button 
-                                        onClick={() => submitStage(currentStageNum)}
-                                        className={`w-full text-white font-bold py-4 rounded-xl transition flex items-center justify-center gap-2 ${
-                                            activeJob.stages?.[currentStageNum]?.status === 'rejected' 
-                                            ? "bg-red-600 hover:bg-red-700"
-                                            : "bg-black hover:bg-slate-800"
-                                        }`}
-                                    >
-                                        <Send size={18} /> 
-                                        {activeJob.stages?.[currentStageNum]?.status === 'rejected' ? "Submit Fixes" : "Submit for Review"}
-                                    </button>
+                                    {isLocked && <Lock size={16} className="text-slate-300"/>}
+                                    
+                                    {/* Reward Tag per stage */}
+                                    {!isLocked && !isCompleted && (
+                                        <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                                            Reward: ${contract.bounty}
+                                        </span>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-                    )}
+
+                                <p className="text-sm text-slate-600 mb-4 pl-11">{stage.req}</p>
+                                
+                                {/* FEEDBACK DISPLAY */}
+                                {stage.feedback && (
+                                    <div className="ml-11 mb-4 bg-red-50 p-3 rounded-lg border border-red-100 text-sm text-red-700">
+                                        <span className="font-bold block text-xs uppercase mb-1">Director Feedback:</span>
+                                        "{stage.feedback}"
+                                    </div>
+                                )}
+
+                                {/* ACTION AREA (Only for Current Stage) */}
+                                {isCurrent && !isPending && (
+                                    <div className="pl-11">
+                                        <div className="mb-4">
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Submission Link</label>
+                                            <input 
+                                                type="text" 
+                                                className="w-full border border-slate-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                                                placeholder="https://docs.google.com/..."
+                                                value={submissionLink}
+                                                onChange={(e) => setSubmissionLink(e.target.value)}
+                                            />
+                                            <p className="text-xs text-slate-400 mt-2">Paste a link to your Google Doc, Slide, or Image.</p>
+                                        </div>
+
+                                        <button 
+                                            onClick={() => submitStage(currentStageNum)}
+                                            className={`w-full text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 ${
+                                                isRejected 
+                                                ? "bg-red-600 hover:bg-red-700"
+                                                : "bg-black hover:bg-slate-800"
+                                            }`}
+                                        >
+                                            <Send size={18} /> 
+                                            {isRejected ? "Resubmit Fixes" : "Submit for Review"}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         )}
+      </div>
     </div>
   );
 }

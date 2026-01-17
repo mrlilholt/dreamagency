@@ -37,67 +37,67 @@ export default function Navbar() {
   return (
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-14">
           
           {/* LEFT: BRANDING */}
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
-                <div className="bg-indigo-600 text-white p-1.5 rounded-lg font-bold">DA</div>
-                <span className="font-extrabold text-slate-800 tracking-tight text-lg">DREAM AGENCY</span>
+                <div className="bg-indigo-600 text-white p-1 rounded-lg font-bold text-xs">DA</div>
+                <span className="font-extrabold text-slate-800 tracking-tight text-base">DREAM AGENCY</span>
             </div>
 
             {/* CENTER: NAVIGATION LINKS */}
             <div className="hidden md:flex items-center gap-1">
-                <Link to="/dashboard" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/dashboard')}`}>
-                    <Layout size={18}/> Dashboard
+                <Link to="/dashboard" className={`px-2.5 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition ${isActive('/dashboard')}`}>
+                    <Layout size={16}/> Dashboard
                 </Link>
-                <Link to="/leaderboard" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/leaderboard')}`}>
-                    <Trophy size={18}/> Leaderboard
+                <Link to="/leaderboard" className={`px-2.5 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition ${isActive('/leaderboard')}`}>
+                    <Trophy size={16}/> Leaderboard
                 </Link>
-                <Link to="/shop" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/shop')}`}>
-                    <ShoppingBag size={18}/> Agency Store
+                <Link to="/shop" className={`px-2.5 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition ${isActive('/shop')}`}>
+                    <ShoppingBag size={16}/> Agency Store
                 </Link>
-                <Link to="/profile" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/profile')}`}>
-                    <User size={18}/> Agent Profile
+                <Link to="/profile" className={`px-2.5 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition ${isActive('/profile')}`}>
+                    <User size={16}/> Agent Profile
                 </Link>
             </div>
           </div>
 
           {/* RIGHT: USER PROFILE */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             
             {/* STATS PILL (Now using 'stats' state) */}
-            <div className="hidden sm:flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
-                <div className="text-sm font-bold text-green-600 flex items-center gap-1">
+            <div className="hidden sm:flex items-center gap-2.5 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-200">
+                <div className="text-xs font-bold text-green-600 flex items-center gap-1">
                     $ {stats.currency}
                 </div>
-                <div className="w-px h-4 bg-slate-300"></div>
-                <div className="text-sm font-bold text-indigo-600 flex items-center gap-1">
+                <div className="w-px h-3 bg-slate-300"></div>
+                <div className="text-xs font-bold text-indigo-600 flex items-center gap-1">
                     {stats.xp} XP
                 </div>
             </div>
 
             {/* AVATAR & DROPDOWN */}
-            <div className="flex items-center gap-3 pl-3 border-l border-slate-100">
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-100">
                 <div className="text-right hidden lg:block">
-                    <p className="text-sm font-bold text-slate-900 leading-none">{stats.displayName}</p>
-                    <p className="text-xs text-slate-500 mt-1">Junior Agent</p>
+                    <p className="text-xs font-bold text-slate-900 leading-none">{stats.displayName}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Junior Agent</p>
                 </div>
                 
                 {user.photoURL ? (
                     <img 
                         src={user.photoURL} 
                         alt="Profile" 
-                        className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
+                        className="w-8 h-8 rounded-full border-2 border-white shadow-sm"
                     />
                 ) : (
-                    <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">
-                        <User size={20}/>
+                    <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">
+                        <User size={16}/>
                     </div>
                 )}
 
-                <button onClick={logout} className="text-slate-400 hover:text-red-500 transition ml-2" title="Sign Out">
-                    <LogOut size={20}/>
+                <button onClick={logout} className="text-slate-400 hover:text-red-500 transition ml-1" title="Sign Out">
+                    <LogOut size={16}/>
                 </button>
             </div>
           </div>

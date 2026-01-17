@@ -1,15 +1,21 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { db } from "../../lib/firebase";
-import { doc, onSnapshot, updateDoc, arrayUnion, increment } from "firebase/firestore"; 
-import { ShoppingBag, DollarSign, Clock, Music, Coffee, Shield } from "lucide-react";
-// 1. Import the Navbar
-import Navbar from "../../components/Navbar"; 
 import { 
-     Search, Filter, Lock, 
+    doc, onSnapshot, updateDoc, arrayUnion, 
+    increment, addDoc, collection, serverTimestamp 
+} from "firebase/firestore"; 
+import { 
+    ShoppingBag, Search, Filter, Lock, 
     Headphones, Zap, Crown, Sun, UserCheck, Trash2, Mic, 
-    Smartphone, FileSignature, Monitor, Ghost
+    Smartphone, FileSignature, Monitor, Ghost,
+    DollarSign, Clock, MapPin, Coffee, LifeBuoy, 
+    Briefcase, PenTool, Trophy, AlertTriangle, TrendingDown,
+    Music // <--- ADDED THIS MISSING IMPORT
 } from "lucide-react";
+import Navbar from "../../components/Navbar"; 
+
+// --- YOUR CUSTOM INVENTORY ---
 const SHOP_ITEMS = [
     {
         id: "debug_help",
@@ -31,7 +37,7 @@ const SHOP_ITEMS = [
         id: "endorsement",
         title: "LinkedIn Endorsement",
         desc: "The Director will write a real skill endorsement or recommendation on your LinkedIn profile (or a college letter blurb).",
-        price: 5000, // Make this EXPENSIVE. It's real value.
+        price: 5000, 
         icon: <Briefcase size={24} className="text-blue-600" />,
         stock: 3
     },
@@ -119,7 +125,7 @@ const SHOP_ITEMS = [
         stock: 15
     },
     {
-        id: "debug_help",
+        id: "debug_help_2", // Unique ID
         title: "Senior Dev Assist",
         desc: "The Director will personally debug your code or fix your design layout for 5 minutes.",
         price: 800,
@@ -145,9 +151,9 @@ const SHOP_ITEMS = [
         stock: 5
     },
     {
-        id: "creative_override",
-        title: "Creative Override",
-        desc: "Veto one specific constraint in a project brief (e.g. \"I don't want to use Blue, I want to use Red\").",
+        id: "creative_override_2",
+        title: "Creative Override (Major)",
+        desc: "Veto one specific constraint in a project brief (e.g. 'I don't want to use Blue, I want to use Red').",
         price: 1800,
         icon: <PenTool size={24} className="text-emerald-500" />,
         stock: 5
@@ -171,8 +177,8 @@ const SHOP_ITEMS = [
         stock: 3
     },
     {
-        id: "endorsement",
-        title: "LinkedIn Endorsement",
+        id: "endorsement_2", 
+        title: "LinkedIn Endorsement (Premium)",
         desc: "The Director writes a real, professional skill recommendation on your LinkedIn profile.",
         price: 5000,
         icon: <Briefcase size={24} className="text-blue-700" />,
@@ -196,13 +202,16 @@ const SHOP_ITEMS = [
     }
 ];
 
-export default function RewardsShop() {
-  const { user } = useAuth();
+export default function RewardShop() {
+  const { user, userData } = useAuth();
+  
+  // State
   const [balance, setBalance] = useState(0);
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [marketStatus, setMarketStatus] = useState({ saleActive: false });
 
-  // Listen to User Data (Balance & Inventory)
+  // 1. LISTEN TO USER DATA
   useEffect(() => {
     if (!user?.uid) return;
     const unsub = onSnapshot(doc(db, "users", user.uid), (doc) => {
@@ -214,23 +223,67 @@ export default function RewardsShop() {
     return () => unsub();
   }, [user]);
 
+  // 2. LISTEN TO MARKET STATUS (Global Sale)
+  useEffect(() => {
+    const unsubMarket = onSnapshot(doc(db, "system", "market"), (docSnap) => {
+        if (docSnap.exists()) {
+            setMarketStatus(docSnap.data());
+        }
+    });
+    return () => unsubMarket();
+  }, []);
+
+  // 3. BUY FUNCTION
   const buyItem = async (item) => {
-    if (balance < item.cost) return alert("Insufficient funds!");
-    if (!confirm(`Buy ${item.name} for $${item.cost}?`)) return;
+    // A. Calculate Dynamic Price
+    const currentPrice = marketStatus.saleActive 
+        ? Math.floor(item.price * 0.5) 
+        : item.price;
+
+    if (balance < currentPrice) return alert("Insufficient funds!");
+    if (!confirm(`Buy ${item.title} for $${currentPrice}?`)) return;
 
     setLoading(true);
     try {
         const userRef = doc(db, "users", user.uid);
+        
+        // B. Update User: Deduct Money & Add to Inventory
         await updateDoc(userRef, {
-            currency: increment(-item.cost),
+            currency: increment(-currentPrice),
             inventory: arrayUnion({
                 id: item.id,
-                name: item.name,
+                name: item.title,
                 purchaseDate: new Date().toISOString(),
-                status: 'unused'
+                status: 'unused',
+                originalPrice: item.price,
+                paidPrice: currentPrice
             })
         });
-        alert("Purchase Successful!");
+
+        // C. Create Receipt for Admin to see in "Active Jobs"
+        if (item.id !== 'market_crash') {
+            await addDoc(collection(db, "active_jobs"), {
+                contract_title: `PURCHASE: ${item.title}`,
+                student_id: user.uid,
+                student_name: userData.name || user.email,
+                status: "pending_fulfillment", 
+                submittedAt: serverTimestamp(),
+                type: "shop_purchase",
+                itemId: item.id
+            });
+        }
+
+        // D. Special Trigger for "Market Crash" item
+        if (item.id === 'market_crash') {
+             await updateDoc(doc(db, "system", "market"), {
+                saleActive: true,
+                triggeredBy: userData.name
+            });
+            alert("MARKET CRASHED! Prices dropped 50%.");
+        } else {
+            alert("Purchase Successful!");
+        }
+
     } catch (error) {
         console.error(error);
         alert("Transaction Failed");
@@ -239,11 +292,10 @@ export default function RewardsShop() {
   };
 
   return (
-    // 2. Wrap everything in the layout container
     <div className="min-h-screen bg-slate-50 pb-20">
       <Navbar /> 
 
-      <div className="max-w-6xl mx-auto p-8">
+      <div className="max-w-7xl mx-auto p-8">
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
@@ -266,29 +318,71 @@ export default function RewardsShop() {
             </div>
         </div>
 
+        {/* --- MARKET CRASH BANNER --- */}
+        {marketStatus.saleActive && (
+          <div className="bg-red-600 text-white p-6 rounded-2xl shadow-xl shadow-red-500/30 mb-10 flex items-center justify-between animate-pulse">
+              <div className="flex items-center gap-4">
+                  <div className="p-3 bg-white/20 rounded-full">
+                      <TrendingDown size={32} className="text-white" />
+                  </div>
+                  <div>
+                      <h2 className="text-2xl font-black uppercase tracking-wider">Market Crash Detected</h2>
+                      <p className="text-red-100 font-bold">ALL PRICES SLASHED BY 50% FOR A LIMITED TIME.</p>
+                  </div>
+              </div>
+              <div className="hidden md:block text-4xl font-black opacity-30 rotate-12">
+                  -50%
+              </div>
+          </div>
+        )}
+
         {/* SHOP GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            {SHOP_ITEMS.map((item) => (
-                <div key={item.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col hover:shadow-md transition">
-                    <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600 mb-4">
-                        {item.icon}
+            {SHOP_ITEMS.map((item) => {
+                // Logic per card
+                const isSale = marketStatus.saleActive;
+                const finalPrice = isSale ? Math.floor(item.price * 0.5) : item.price;
+                const canAfford = balance >= finalPrice;
+
+                return (
+                    <div key={item.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col hover:shadow-md transition relative overflow-hidden">
+                        
+                        {/* SALE BADGE */}
+                        {isSale && (
+                            <div className="absolute top-0 right-0 bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-bl-xl z-10">
+                                -50% SALE
+                            </div>
+                        )}
+
+                        <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600 mb-4">
+                            {item.icon}
+                        </div>
+                        <h3 className="font-bold text-lg text-slate-900 mb-2">{item.title}</h3>
+                        <p className="text-sm text-slate-500 mb-6 flex-1">{item.desc}</p>
+                        
+                        {/* Price Display */}
+                        <div className="mb-4">
+                             {isSale && (
+                                <span className="block text-xs text-slate-400 line-through decoration-red-500 decoration-2 font-bold">
+                                    ${item.price}
+                                </span>
+                            )}
+                        </div>
+
+                        <button 
+                            onClick={() => buyItem(item)}
+                            disabled={loading || !canAfford}
+                            className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition ${
+                                canAfford 
+                                ? (isSale ? "bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-200" : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200")
+                                : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                            }`}
+                        >
+                            <DollarSign size={16} /> {finalPrice}
+                        </button>
                     </div>
-                    <h3 className="font-bold text-lg text-slate-900 mb-2">{item.name}</h3>
-                    <p className="text-sm text-slate-500 mb-6 flex-1">{item.desc}</p>
-                    
-                    <button 
-                        onClick={() => buyItem(item)}
-                        disabled={loading || balance < item.cost}
-                        className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition ${
-                            balance >= item.cost 
-                            ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200" 
-                            : "bg-slate-100 text-slate-400 cursor-not-allowed"
-                        }`}
-                    >
-                        <DollarSign size={16} /> {item.cost}
-                    </button>
-                </div>
-            ))}
+                );
+            })}
         </div>
 
         {/* INVENTORY SECTION */}
@@ -302,7 +396,10 @@ export default function RewardsShop() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {inventory.map((item, index) => (
                         <div key={index} className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between">
-                            <span className="font-bold text-slate-700">{item.name}</span>
+                            <div>
+                                <span className="font-bold text-slate-700 block">{item.name}</span>
+                                <span className="text-xs text-slate-400">{new Date(item.purchaseDate).toLocaleDateString()}</span>
+                            </div>
                             <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-bold">UNUSED</span>
                         </div>
                     ))}
