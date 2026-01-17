@@ -5,12 +5,195 @@ import { doc, onSnapshot, updateDoc, arrayUnion, increment } from "firebase/fire
 import { ShoppingBag, DollarSign, Clock, Music, Coffee, Shield } from "lucide-react";
 // 1. Import the Navbar
 import Navbar from "../../components/Navbar"; 
-
+import { 
+     Search, Filter, Lock, 
+    Headphones, Zap, Crown, Sun, UserCheck, Trash2, Mic, 
+    Smartphone, FileSignature, Monitor, Ghost
+} from "lucide-react";
 const SHOP_ITEMS = [
-    { id: 'late_pass', name: 'Late Assignment Pass', cost: 150, icon: <Clock size={24}/>, desc: 'Submit one assignment up to 24 hours late with no penalty.' },
-    { id: 'music_pass', name: 'Headphones Pass', cost: 50, icon: <Music size={24}/>, desc: 'Permission to listen to music during independent work time for one day.' },
-    { id: 'seat_swap', name: 'Seat Swap', cost: 300, icon: <Coffee size={24}/>, desc: 'Swap seats with a willing peer for one week.' },
-    { id: 'resubmit', name: 'Re-Submission Token', cost: 500, icon: <Shield size={24}/>, desc: 'Resubmit a graded project for a higher score cap.' },
+    {
+        id: "debug_help",
+        title: "Senior Dev Consultation",
+        desc: "The Director (Teacher) will personally sit at your desk and debug your code for 5 minutes. No judgement.",
+        price: 800,
+        icon: <LifeBuoy size={24} className="text-red-500" />,
+        stock: 5
+    },
+    {
+        id: "hall_pass",
+        title: "Field Reconnaissance",
+        desc: "An extended 10-minute break to 'scout the perimeter' (Walk, fountain, bathroom). No questions asked.",
+        price: 250,
+        icon: <MapPin size={24} className="text-indigo-500" />,
+        stock: 20
+    },
+    {
+        id: "endorsement",
+        title: "LinkedIn Endorsement",
+        desc: "The Director will write a real skill endorsement or recommendation on your LinkedIn profile (or a college letter blurb).",
+        price: 5000, // Make this EXPENSIVE. It's real value.
+        icon: <Briefcase size={24} className="text-blue-600" />,
+        stock: 3
+    },
+    {
+        id: "creative_override",
+        title: "Creative Director Override",
+        desc: "Veto one constraint in a project brief. (e.g., Use a different color palette, font, or layout than the client asked for).",
+        price: 1500,
+        icon: <PenTool size={24} className="text-pink-500" />,
+        stock: 5
+    },
+    {
+        id: "early_release",
+        title: "Early Clock-Out",
+        desc: "Permission to pack up and leave class 3 minutes before the bell.",
+        price: 400,
+        icon: <Clock size={24} className="text-amber-500" />,
+        stock: 10
+    },
+    {
+        id: "title_change",
+        title: "Promotion (Title Change)",
+        desc: "Change your role title on the dashboard from 'Junior Associate' to a custom title (e.g., 'Vice President of CSS') for one week.",
+        price: 1000,
+        icon: <Trophy size={24} className="text-yellow-500" />,
+        stock: 1
+    },
+    // --- TIER 1: CONVENIENCE (Cheap) ---
+    {
+        id: "admin_exemption",
+        title: "Admin Exemption",
+        desc: "Skip the 'Bell Ringer' or 'Exit Ticket' for one day. Mark it as 'Delegated'.",
+        price: 150,
+        icon: <FileSignature size={24} className="text-slate-400" />,
+        stock: 50
+    },
+    {
+        id: "hydration_permit",
+        title: "Coffee Run",
+        desc: "Permission to go to the cafeteria/vending machine for 5 minutes during work time.",
+        price: 200,
+        icon: <Coffee size={24} className="text-amber-700" />,
+        stock: 20
+    },
+    {
+        id: "dark_mode",
+        title: "Studio Dark Mode",
+        desc: "The buyer can demand the classroom lights be turned off (or dimmed) for the entire period.",
+        price: 250,
+        icon: <Sun size={24} className="text-slate-900" />,
+        stock: 5
+    },
+    {
+        id: "undercover",
+        title: "Undercover Agent",
+        desc: "Permission to wear a hat, hood, or sunglasses inside the 'office' for one day.",
+        price: 300,
+        icon: <Ghost size={24} className="text-purple-500" />,
+        stock: 20
+    },
+
+    // --- TIER 2: POWER & INFLUENCE (Mid-Range) ---
+    {
+        id: "aux_cord",
+        title: "DJ Control",
+        desc: "You control the classroom speaker for 20 minutes. Must remain work-appropriate.",
+        price: 500,
+        icon: <Music size={24} className="text-pink-500" />,
+        stock: 10
+    },
+    {
+        id: "consultant_badge",
+        title: "Roaming Consultant",
+        desc: "Permission to walk around and 'consult' (talk) with other teams during independent work time.",
+        price: 600,
+        icon: <UserCheck size={24} className="text-indigo-500" />,
+        stock: 10
+    },
+    {
+        id: "tech_priority",
+        title: "IT Priority Ticket",
+        desc: "Skip the line when asking for help. The Director (Teacher) comes to you next, immediately.",
+        price: 750,
+        icon: <Zap size={24} className="text-yellow-500" />,
+        stock: 15
+    },
+    {
+        id: "debug_help",
+        title: "Senior Dev Assist",
+        desc: "The Director will personally debug your code or fix your design layout for 5 minutes.",
+        price: 800,
+        icon: <LifeBuoy size={24} className="text-red-500" />,
+        stock: 5
+    },
+
+    // --- TIER 3: EXECUTIVE STATUS (Expensive) ---
+    {
+        id: "the_throne",
+        title: "The CEO Chair",
+        desc: "Swap chairs with the Teacher for the entire class period. Enjoy the lumbar support.",
+        price: 1200,
+        icon: <Crown size={24} className="text-yellow-600" />,
+        stock: 1
+    },
+    {
+        id: "press_release",
+        title: "Positive Press Release",
+        desc: "The Director sends a positive email home to your stakeholders (parents) bragging about a specific win.",
+        price: 1500,
+        icon: <Mic size={24} className="text-blue-500" />,
+        stock: 5
+    },
+    {
+        id: "creative_override",
+        title: "Creative Override",
+        desc: "Veto one specific constraint in a project brief (e.g. \"I don't want to use Blue, I want to use Red\").",
+        price: 1800,
+        icon: <PenTool size={24} className="text-emerald-500" />,
+        stock: 5
+    },
+    {
+        id: "dual_monitor",
+        title: "Hardware Upgrade",
+        desc: "First dibs on the 'best computer' or permission to use the teacher's second monitor (if applicable).",
+        price: 2000,
+        icon: <Monitor size={24} className="text-cyan-500" />,
+        stock: 2
+    },
+
+    // --- TIER 4: LEGENDARY (The Grinds) ---
+    {
+        id: "record_expungement",
+        title: "Record Expungement",
+        desc: "Drop your lowest quiz score or minor assignment grade from the gradebook.",
+        price: 4000,
+        icon: <Trash2 size={24} className="text-red-600" />,
+        stock: 3
+    },
+    {
+        id: "endorsement",
+        title: "LinkedIn Endorsement",
+        desc: "The Director writes a real, professional skill recommendation on your LinkedIn profile.",
+        price: 5000,
+        icon: <Briefcase size={24} className="text-blue-700" />,
+        stock: 3
+    },
+    {
+        id: "contract_kill",
+        title: "Contract Cancellation",
+        desc: "You are excused from ONE minor assignment entirely. You get full credit/pay.",
+        price: 8000,
+        icon: <Lock size={24} className="text-slate-900" />,
+        stock: 1
+    },
+    {
+        id: "market_crash",
+        title: "Market Manipulation",
+        desc: "Trigger a 'Flash Sale' where all shop items are 50% off for the rest of the class. (Hero of the People).",
+        price: 10000,
+        icon: <Smartphone size={24} className="text-green-500" />,
+        stock: 1
+    }
 ];
 
 export default function RewardsShop() {
