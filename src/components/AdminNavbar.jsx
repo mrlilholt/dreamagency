@@ -30,7 +30,7 @@ export default function AdminNavbar() {
 
             {/* CENTER: NAVIGATION LINKS */}
             <div className="hidden md:flex items-center gap-1">
-                <Link to="/admin/dashboard" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/admin/dashboard')}`}>
+                <Link to="/dashboard" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/admin/dashboard')}`}>
                     <Layout size={18}/> Dashboard
                 </Link>
                 <Link to="/admin/roster" className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition ${isActive('/admin/roster')}`}>

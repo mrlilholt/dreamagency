@@ -207,8 +207,7 @@ const [showConfetti, setShowConfetti] = useState(false);
 
                 {/* RIGHT: CURRENT STAGE ACTION */}
                 <div className="lg:col-span-2">
-                    {activeJob.status === 'completed' ? (
-                         <div className="bg-green-600 text-white p-12 rounded-2xl text-center shadow-lg">
+{activeJob.status === 'completed' || !contract.stages[currentStageNum] ? (                         <div className="bg-green-600 text-white p-12 rounded-2xl text-center shadow-lg">
                             <CheckCircle size={64} className="mx-auto mb-4 text-green-200" />
                             <h2 className="text-3xl font-bold mb-2">Mission Accomplished!</h2>
                             <p className="text-green-100 text-lg">You have completed all stages and earned full rewards.</p>

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { db } from "../../lib/firebase";
-import { collection, onSnapshot, doc, updateDoc, increment } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp} from "firebase/firestore";
 import { CLASS_CODES, BADGES } from "../../lib/gameConfig"; // <--- 1. IMPORT BADGES
 import { 
     Users, Filter, Search, Trophy, DollarSign, 
-    Briefcase, AlertCircle, Trash2, Gavel, ArrowLeft, ChevronRight, Medal
+    Briefcase, AlertCircle, Trash2, Gavel, ArrowLeft, ChevronRight, Medal, Send, MessageSquare
 } from "lucide-react";
 import AdminNavbar from "../../components/AdminNavbar";
 
@@ -21,6 +21,8 @@ export default function AdminRoster() {
   const [bonusForm, setBonusForm] = useState({ currency: 0, xp: 0 });
   const [selectedBadgeId, setSelectedBadgeId] = useState(""); // <--- 2. BADGE STATE
 
+  const [adminMessage, setAdminMessage] = useState("");
+const [sendingMsg, setSendingMsg] = useState(false);
   // --- LISTENERS ---
   useEffect(() => {
     const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
@@ -44,6 +46,28 @@ export default function AdminRoster() {
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
 
+  const sendDirectMessage = async (e) => {
+    e.preventDefault();
+    if (!adminMessage.trim() || !selectedStudentId) return;
+    
+    setSendingMsg(true);
+    try {
+        // Write to the 'alerts' subcollection we just set up listeners for
+        await addDoc(collection(db, "users", selectedStudentId, "alerts"), {
+            message: adminMessage,
+            createdAt: serverTimestamp(),
+            read: false
+        });
+        
+        setAdminMessage(""); // Clear box
+        alert("Transmission Sent!"); 
+    } catch (error) {
+        console.error("Error sending:", error);
+        alert("Transmission Failed");
+    } finally {
+        setSendingMsg(false);
+    }
+};
   // --- ACTIONS ---
 
   const handleRedeem = async (studentId, itemIndex, currentInventory) => {
@@ -98,7 +122,28 @@ export default function AdminRoster() {
           alert("Error granting badge.");
       }
   };
-
+{/* --- SEND DIRECT INTEL --- */}
+<div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mt-6">
+    <h3 className="font-bold text-slate-700 mb-2 flex items-center gap-2">
+        <MessageSquare size={16}/> Send Classified Intel
+    </h3>
+    <form onSubmit={sendDirectMessage}>
+        <textarea
+            className="w-full p-3 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none mb-2"
+            rows="3"
+            placeholder={`Message for ${selectedStudent?.name || "Agent"}...`}
+            value={adminMessage}
+            onChange={(e) => setAdminMessage(e.target.value)}
+        />
+        <button 
+            type="submit" 
+            disabled={sendingMsg || !adminMessage}
+            className="w-full py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+            {sendingMsg ? "Transmitting..." : <><Send size={14}/> Send Transmission</>}
+        </button>
+    </form>
+</div>
 
   // --- RENDERING HELPERS ---
   const filteredStudents = students.filter(s => {
@@ -332,7 +377,28 @@ export default function AdminRoster() {
                         </button>
                     </form>
                 </div>
-
+                {/* 3. SEND CLASSIFIED INTEL (PASTE THIS HERE) */}
+<div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+    <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <MessageSquare className="text-indigo-600" size={20}/> Send Classified Intel
+    </h2>
+    <form onSubmit={sendDirectMessage} className="space-y-3">
+        <textarea
+            className="w-full p-3 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+            rows="3"
+            placeholder={`Message for ${selectedStudent?.name || selectedStudent?.displayName || "Agent"}...`}
+            value={adminMessage}
+            onChange={(e) => setAdminMessage(e.target.value)}
+        />
+        <button 
+            type="submit" 
+            disabled={sendingMsg || !adminMessage}
+            className="w-full py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-indigo-600 transition flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+            {sendingMsg ? "Transmitting..." : <><Send size={14}/> Send Transmission</>}
+        </button>
+    </form>
+</div>
             </div>
         </div>
     </div>
