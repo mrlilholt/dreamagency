@@ -64,6 +64,7 @@ export default function AgentProfile() {
                         src={agentPhoto} 
                         alt="Agent" 
                         className="w-24 h-24 rounded-2xl object-cover shadow-lg shadow-slate-200 border-4 border-white"
+                        referrerPolicy="no-referrer"
                     />
                 ) : (
                     <div className="w-24 h-24 bg-slate-900 rounded-2xl flex items-center justify-center text-4xl text-white font-black shadow-lg shadow-slate-300 uppercase border-4 border-white">

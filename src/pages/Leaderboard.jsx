@@ -1,48 +1,75 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../context/AuthContext"; // <--- Essential for filtering
 import { db } from "../lib/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 import Navbar from "../components/Navbar"; 
-import { Trophy, Medal, Crown, Zap, LayoutList, Rocket } from "lucide-react";
+import { Trophy, Medal, Crown, Zap, LayoutList, Rocket, Lock } from "lucide-react";
 
 export default function Leaderboard() {
+  const { userData } = useAuth(); // Get current user's class_id
   const [users, setUsers] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [contracts, setContracts] = useState([]); // <--- NEW: Store contracts
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("OVERALL");
 
   useEffect(() => {
-    // 1. Listen to Users (Real-time)
+    // 1. Listen to Users
     const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
         setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    // 2. Listen to Active Jobs (Real-time)
+    // 2. Listen to Active Jobs
     const unsubJobs = onSnapshot(collection(db, "active_jobs"), (snap) => {
         setJobs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // 3. Listen to Contracts (NEW: This is our source of truth for Tabs)
+    const unsubContracts = onSnapshot(collection(db, "contracts"), (snap) => {
+        setContracts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         setLoading(false);
     });
 
     return () => {
         unsubUsers();
         unsubJobs();
+        unsubContracts();
     };
   }, []);
 
-  // --- LOGIC ---
-  const contractTitles = Array.from(new Set(jobs.map(j => j.contract_title))).sort();
+  // --- 🛡️ GATEKEEPER LOGIC 🛡️ ---
+  
+  // 1. Filter Users (Show only classmates)
+  const visibleUsers = users.filter(u => {
+      if (userData?.role === 'admin') return true;
+      return u.class_id?.trim() === userData?.class_id?.trim();
+  });
 
+  // 2. Filter Contracts (Show only tabs assigned to this class)
+  const visibleContracts = contracts.filter(c => {
+      if (userData?.role === 'admin') return true;
+      return c.class_id?.trim() === userData?.class_id?.trim();
+  });
+
+  // --- DYNAMIC TABS ---
+  // Generate tabs based on the ALLOWED contracts, not just messy active jobs
+  const contractTitles = visibleContracts.map(c => c.title).sort();
+
+  // --- RANKING LOGIC ---
   const getRankings = () => {
     if (activeTab === "OVERALL") {
-        return [...users]
+        return [...visibleUsers]
             .filter(u => u.xp > 0)
             .sort((a, b) => (b.xp || 0) - (a.xp || 0))
             .slice(0, 50);
     } else {
+        // Filter jobs by the active tab Title AND ensure the student is in our visible list
         const relevantJobs = jobs.filter(j => j.contract_title === activeTab);
+        
         return relevantJobs
             .map(job => {
-                const student = users.find(u => u.id === job.student_id);
-                if (!student) return null;
+                const student = visibleUsers.find(u => u.id === job.student_id);
+                if (!student) return null; // Skip if student is not in this class
                 return {
                     ...student,
                     rankingMetric: job.current_stage, 
@@ -50,7 +77,7 @@ export default function Leaderboard() {
                 };
             })
             .filter(item => item !== null)
-            // Sort by Stage Descending, then by XP Descending (Tie breaker)
+            // Sort by Stage Descending, then by XP Descending
             .sort((a, b) => {
                 if (b.rankingMetric !== a.rankingMetric) {
                     return b.rankingMetric - a.rankingMetric;
@@ -77,6 +104,8 @@ export default function Leaderboard() {
     return <span className="font-bold text-slate-400 w-6 text-center">{index + 1}</span>;
   };
 
+  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center">Loading Encryption Keys...</div>;
+
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
       <Navbar />
@@ -85,7 +114,12 @@ export default function Leaderboard() {
             <h1 className="text-4xl font-extrabold text-slate-900 mb-2 flex justify-center items-center gap-3">
                 <Trophy className="text-yellow-500" /> Agency Leaderboards
             </h1>
-            <p className="text-slate-500">Live rankings from the agency database.</p>
+            <p className="text-slate-500 flex items-center justify-center gap-2">
+                Division Rankings: 
+                <span className="font-bold text-indigo-600 uppercase bg-indigo-50 px-2 py-1 rounded text-xs">
+                    {userData?.role === 'admin' ? 'ALL AGENTS (ADMIN)' : userData?.class_id || "Unassigned"}
+                </span>
+            </p>
         </div>
 
         {/* TABS */}
@@ -98,6 +132,8 @@ export default function Leaderboard() {
             >
                 <Zap size={16} className={activeTab === "OVERALL" ? "fill-white" : ""} /> Overall XP
             </button>
+            
+            {/* Render tabs from the Filtered Contracts list */}
             {contractTitles.map(title => (
                 <button
                     key={title}
@@ -115,8 +151,11 @@ export default function Leaderboard() {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 min-h-[400px]">
             {rankings.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                    <Rocket size={48} className="mb-4 opacity-20"/>
-                    <p>No active agents found for this category.</p>
+                    <Lock size={48} className="mb-4 opacity-20"/>
+                    <p>No active agents found in the <span className="font-bold">{userData?.class_id}</span> division.</p>
+                    {activeTab !== "OVERALL" && (
+                        <p className="text-xs mt-2">Be the first to start this mission!</p>
+                    )}
                 </div>
             ) : (
                 rankings.map((agent, index) => (

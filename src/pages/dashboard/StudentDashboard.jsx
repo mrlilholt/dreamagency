@@ -10,9 +10,10 @@ import {
   CheckCircle, 
   Loader, 
   AlertCircle, 
-  ArrowRight, // <--- Added
-  Trophy,     // <--- Added (You will need this for the XP card)
-  PlayCircle  // <--- Added (You will need this for the Active Missions header)
+  ArrowRight, 
+  Trophy,     
+  PlayCircle,
+  Lock // <--- Added Lock icon for empty state
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
@@ -34,11 +35,9 @@ export default function StudentDashboard() {
   useEffect(() => {
     if (!user?.uid) return;
     
-    console.log("💰 Listening for Wallet Updates for:", user.uid);
     const unsubscribe = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            console.log("💰 Wallet Updated:", data.currency);
             setStats({
                 currency: data.currency || 0,
                 xp: data.xp || 0
@@ -46,13 +45,12 @@ export default function StudentDashboard() {
         }
     });
     return () => unsubscribe();
-  }, [user?.uid]); // Only restart if UID changes
+  }, [user?.uid]); 
 
   // 2. Listen for Job Updates (Status changes)
   useEffect(() => {
     if (!user?.uid) return;
 
-    console.log("🔥 Listening for Active Jobs for:", user.uid);
     const q = query(collection(db, "active_jobs"), where("student_id", "==", user.uid));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -61,14 +59,10 @@ export default function StudentDashboard() {
             const data = doc.data();
             mapping[data.contract_id] = data;
         });
-        
-        console.log("🔥 Jobs Updated. Active Count:", Object.keys(mapping).length);
-        console.log("🔥 Current Jobs Data:", mapping);
-        
         setActiveJobs(mapping);
     });
     return () => unsubscribe();
-  }, [user?.uid]); // Only restart if UID changes
+  }, [user?.uid]); 
 
   // 3. Listen for New Contracts
   useEffect(() => {
@@ -82,8 +76,19 @@ export default function StudentDashboard() {
     });
     return () => unsubscribe();
   }, []);
-// --- LEVEL CALCULATIONS ---
-  // Calculates level based on 1000 XP per level
+
+  // --- 🛡️ THE GATEKEEPER LOGIC 🛡️ ---
+  // This filters the raw "contracts" list before we map over it
+  const visibleContracts = contracts.filter(contract => {
+    // 1. Admins see EVERYTHING
+    if (userData?.role === 'admin') return true;
+
+    // 2. Students only see contracts matching their specific class_id
+    // We trim strings just in case there are accidental spaces
+    return contract.class_id?.trim() === userData?.class_id?.trim();
+  });
+
+  // --- LEVEL CALCULATIONS ---
   const currentLevel = Math.floor((stats.xp || 0) / 1000) + 1;
   const nextLevelXp = currentLevel * 1000;
   const progress = ((stats.xp % 1000) / 1000) * 100;
@@ -99,7 +104,9 @@ export default function StudentDashboard() {
             <h1 className="text-3xl font-extrabold text-slate-900">
                 Welcome back, {user?.displayName?.split(' ')[0]}.
             </h1>
-            <p className="text-slate-500">Here is your current Contract status.</p>
+            <p className="text-slate-500">
+                Class Clearance: <span className="font-bold text-indigo-600 uppercase">{userData?.class_id || "Unassigned"}</span>
+            </p>
         </div>
 
         {/* --- STATS GRID --- */}
@@ -120,7 +127,6 @@ export default function StudentDashboard() {
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600 z-10">
                     <DollarSign size={32} />
                 </div>
-                {/* Decoration */}
                 <div className="absolute right-0 top-0 w-32 h-32 bg-green-50 rounded-full -mr-10 -mt-10 group-hover:scale-110 transition duration-500"></div>
             </div>
 
@@ -132,8 +138,6 @@ export default function StudentDashboard() {
                         <span className="text-indigo-600 font-bold text-xs">{stats.xp} / {nextLevelXp} XP</span>
                     </div>
                     <h2 className="text-4xl font-black text-slate-900 mb-3">Level {currentLevel}</h2>
-                    
-                    {/* Progress Bar */}
                     <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                         <div 
                             className="h-full bg-indigo-600 rounded-full transition-all duration-1000 ease-out"
@@ -144,26 +148,31 @@ export default function StudentDashboard() {
                 <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 z-10 shrink-0">
                     <Trophy size={32} />
                 </div>
-                {/* Decoration */}
                 <div className="absolute right-0 top-0 w-32 h-32 bg-indigo-50 rounded-full -mr-10 -mt-10 group-hover:scale-110 transition duration-500"></div>
             </div>
             
-        </div> {/* <--- THIS CLOSING TAG MUST BE HERE, AFTER BOTH CARDS */}
+        </div>
 
         <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
             <Briefcase className="text-slate-400" size={20}/> Available Contracts
         </h2>
         
-        {contracts.length === 0 ? (
-            <div className="p-10 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">
-                No active contracts available right now.
+        {/* WE NOW USE visibleContracts INSTEAD OF contracts */}
+        {visibleContracts.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
+                    <Lock className="text-slate-400" size={32} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-700">Restricted Access</h3>
+                <p className="max-w-md mx-auto mt-2">
+                    No active contracts found for the <span className="font-mono text-slate-600 font-bold">{userData?.class_id}</span> division.
+                </p>
             </div>
         ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {contracts.map(contract => {
+                {visibleContracts.map(contract => {
                     const myJob = activeJobs[contract.id];
 
-                    // Determine Styles based on status
                     let badgeClass = "bg-indigo-100 text-indigo-700";
                     let borderClass = "bg-white border-slate-200 hover:shadow-md";
                     let buttonClass = "bg-white border border-slate-300 text-slate-700 hover:bg-slate-800 hover:text-white";
@@ -192,8 +201,8 @@ export default function StudentDashboard() {
                         <div key={contract.id} className={`rounded-xl overflow-hidden shadow-sm border transition flex flex-col h-full ${borderClass}`}>
                             <div className="p-6 flex-1">
                                 <div className="flex justify-between items-start mb-4">
-                                    <span className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded uppercase font-bold tracking-wider">
-                                        {contract.class_id === 'all' ? 'Global' : contract.class_id}
+                                    <span className="bg-slate-100 text-slate-600 text-[10px] px-2 py-1 rounded uppercase font-bold tracking-wider">
+                                        {contract.class_id?.replace(/_/g, " ")}
                                     </span>
                                     
                                     {/* STATUS BADGE */}

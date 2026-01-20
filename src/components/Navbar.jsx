@@ -89,6 +89,7 @@ export default function Navbar() {
                         src={user.photoURL} 
                         alt="Profile" 
                         className="w-8 h-8 rounded-full border-2 border-white shadow-sm"
+                        referrerPolicy="no-referrer"
                     />
                 ) : (
                     <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">
