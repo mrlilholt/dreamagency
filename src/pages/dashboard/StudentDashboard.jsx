@@ -31,27 +31,67 @@ export default function StudentDashboard() {
     xp: userData?.xp || 0 
   });
 
-  // 1. Listen for Money/XP Updates
+ // --- STATE FOR CLASSES (New) ---
+  const [allowedClasses, setAllowedClasses] = useState([]);
+
+  // 1. LIVE LISTENER: User Profile (XP, Money, AND Classes)
   useEffect(() => {
     if (!user?.uid) return;
     
     const unsubscribe = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
+            
+            // A. Update Stats
             setStats({
                 currency: data.currency || 0,
                 xp: data.xp || 0
             });
+
+            // B. Update Class List
+            // If the array exists, use it. If not, use the single class_id.
+            if (data.enrolled_classes && data.enrolled_classes.length > 0) {
+                setAllowedClasses(data.enrolled_classes);
+            } else if (data.class_id) {
+                setAllowedClasses([data.class_id]);
+            }
         }
     });
     return () => unsubscribe();
-  }, [user?.uid]); 
+  }, [user]);
 
-  // 2. Listen for Job Updates (Status changes)
+  // 2. LIVE LISTENER: Contracts (Depends on allowedClasses)
+  useEffect(() => {
+    // Wait until we have a class list so we don't query empty
+    if (allowedClasses.length === 0) return;
+
+    // Query Firestore for ANY class in the list
+    const q = query(
+        collection(db, "contracts"),
+        where("class_id", "in", allowedClasses)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const liveContracts = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            // Filter for "open" status here (Safest way to avoid Index errors)
+            .filter(job => job.status === "open");
+
+        setContracts(liveContracts);
+    });
+
+    return () => unsubscribe();
+  }, [allowedClasses]); 
+
+  // 3. LIVE LISTENER: Active Jobs (Student Progress)
   useEffect(() => {
     if (!user?.uid) return;
 
-    const q = query(collection(db, "active_jobs"), where("student_id", "==", user.uid));
+    // This query finds jobs the student has ACCEPTED (active_jobs collection)
+    const q = query(
+        collection(db, "active_jobs"),
+        where("student_id", "==", user.uid)
+    );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const mapping = {};
@@ -62,30 +102,17 @@ export default function StudentDashboard() {
         setActiveJobs(mapping);
     });
     return () => unsubscribe();
-  }, [user?.uid]); 
+  }, [user]);// <--- dependency ensures it updates if user data changes
 
-  // 3. Listen for New Contracts
-  useEffect(() => {
-    const q = query(collection(db, "contracts"), where("status", "==", "open"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const liveContracts = snapshot.docs.map(doc => ({
-            id: doc.id, 
-            ...doc.data()
-        }));
-        setContracts(liveContracts);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // --- 🛡️ THE GATEKEEPER LOGIC 🛡️ ---
+// --- 🛡️ THE GATEKEEPER LOGIC 🛡️ ---
   // This filters the raw "contracts" list before we map over it
   const visibleContracts = contracts.filter(contract => {
     // 1. Admins see EVERYTHING
     if (userData?.role === 'admin') return true;
 
-    // 2. Students only see contracts matching their specific class_id
-    // We trim strings just in case there are accidental spaces
-    return contract.class_id?.trim() === userData?.class_id?.trim();
+    // 2. Students see contracts if they are in the 'allowedClasses' list
+    // (We use the state we built earlier, rather than the single userData.class_id)
+    return allowedClasses.includes(contract.class_id);
   });
 
   // --- LEVEL CALCULATIONS ---
