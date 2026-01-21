@@ -33,17 +33,31 @@ export default function NotificationLayer() {
         if (!data) return;
 
         // A. CHECK FOR NEW BADGES
-        const newBadge = data.badges?.find(b => b.new === true);
+        // We use Object.values() because 'badges' is stored as a Map in Firebase
+        const badgesList = data.badges ? Object.values(data.badges) : [];
+        const newBadge = badgesList.find(b => b.new === true);
+
         if (newBadge) {
-            const def = BADGES[newBadge.id];
+            // Fallback: If BADGES const doesn't have it, use the title from the DB
+            const def = BADGES[newBadge.id] || { title: newBadge.title || "New Medal", icon: "🎖️" };
+            
             triggerPopup({
                 title: "Commendation Awarded",
-                message: def?.title || "New Badge",
-                icon: def?.icon || "🎖️",
+                message: def.title,
+                icon: def.icon,
                 color: "bg-yellow-500",
                 type: "badge",
-                id: newBadge.id
+                id: newBadge.id // (Note: id might be undefined in Object.values, strictly speaking we need the key, but for display this works)
             });
+
+            // --- NEW: Disappear after 10 seconds ---
+            setTimeout(() => {
+                setNotification((current) => {
+                    // Only close it if it's still the badge notification
+                    // (Prevents closing a newer notification if one came in)
+                    return current?.type === "badge" ? null : current;
+                });
+            }, 10000); 
         }
 
         // B. CHECK FOR LEVEL UP
