@@ -144,9 +144,9 @@ export default function RewardShop() {
         <div className="flex flex-col md:flex-row justify-between items-end gap-4">
             <div>
                 <h1 className="text-3xl font-black text-slate-900 flex items-center gap-2">
-                    <ShoppingBag className="text-indigo-600" /> Black Market
+                    <ShoppingBag className="text-indigo-600" /> Reward Shop
                 </h1>
-                <p className="text-slate-500 font-medium">Spend your hard-earned cash on illegal perks.</p>
+                <p className="text-slate-500 font-medium">Spend your hard-earned cash on real life rewards.</p>
             </div>
             <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200 flex items-center gap-2">
                 <div className="bg-emerald-100 p-2 rounded-full">
