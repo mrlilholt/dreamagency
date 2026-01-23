@@ -56,6 +56,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({ activeCount: 0, agentCount: 0 });
   const [filterClass, setFilterClass] = useState("all"); 
   const [activeTab, setActiveTab] = useState("approvals"); 
+    const [showLinksOnly, setShowLinksOnly] = useState(false);
 
   // --- LOOKUP STATE ---
   const [contractLookup, setContractLookup] = useState({});
@@ -291,10 +292,29 @@ export default function AdminDashboard() {
       setShopForm({ title: "", desc: "", price: 0, stock: 0, iconName: "briefcase" });
   };
 
-  const filteredSubmissions = submissions.filter(sub => {
-      if (filterClass === "all") return true;
+  // --- FILTERING ---
+  const filteredSubmissions = submissions.map(sub => {
+      // HELPER: Normalize the link so the filter AND the button see the same thing
+      // We attach a 'displayLink' property to the object if it's missing, 
+      // trying every possible field name your database might use.
+      const rawLink = sub.current_stage_link || sub.link || sub.url || sub.submission_link || sub.displayLink;
+      
+      return { ...sub, displayLink: rawLink };
+  }).filter(sub => {
+      // 1. Identify the Class
       const associatedClass = contractLookup[sub.contract_id] || "Unassigned";
-      return associatedClass === filterClass;
+
+      // 2. Class Filter Check
+      if (filterClass !== "all" && associatedClass !== filterClass) {
+          return false;
+      }
+
+      // 3. Link Filter Check (Now checks the normalized 'displayLink')
+      if (showLinksOnly && !sub.displayLink) {
+          return false;
+      }
+
+      return true;
   });
 
   return (
@@ -371,7 +391,8 @@ export default function AdminDashboard() {
                                 <Inbox className="text-indigo-600" size={20} /> 
                                 Submission Queue
                             </h2>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2">
                                 <Filter size={16} className="text-slate-400" />
                                 <select 
                                     className="bg-white border border-slate-200 text-slate-700 text-sm font-bold py-2 px-4 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 min-w-[150px]"
@@ -387,6 +408,23 @@ export default function AdminDashboard() {
                                         <option disabled>Loading classes...</option>
                                     )}
                                 </select>
+                            </div>
+                            {/* 2. NEW TOGGLE SWITCH */}
+                            <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition select-none">
+                                <div className="relative">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer"
+                                        checked={showLinksOnly}
+                                        onChange={() => setShowLinksOnly(!showLinksOnly)}
+                                    />
+                                    {/* Switch Track */}
+                                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                </div>
+                                <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+                                    Has Link
+                                </span>
+                            </label>
                             </div>
                         </div>
                         
