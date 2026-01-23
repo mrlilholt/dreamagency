@@ -129,12 +129,22 @@ export default function AdminDashboard() {
     const unsubContracts = onSnapshot(collection(db, "contracts"), (snap) => {
         const lookup = {};
         const classesSet = new Set();
+        
         snap.docs.forEach(d => {
             const data = d.data();
-            const classId = data.class_id || "Unassigned";
-            lookup[d.id] = classId;
+            // This handles the fallback right here, once.
+            const classId = data.class_id || "Unassigned"; 
+            
+            // Your suggestion:
+            lookup[d.id] = { 
+                ...data,      // Keeps 'bounty', 'xp_reward' (for payments)
+                id: d.id, 
+                classId       // Keeps the clean class name (for filtering)
+            }; 
+            
             classesSet.add(classId);
         });
+        
         setContractLookup(lookup);
         setAvailableClasses(Array.from(classesSet).sort());
     });
@@ -191,20 +201,36 @@ export default function AdminDashboard() {
       try {
           const currentStage = job.current_stage || 1;
           const totalStages = Object.keys(job.stages || {}).length;
-          const updates = {};
           
+          // 1. GET THE REWARDS FROM THE LOOKUP
+          // We use the lookup we built because the 'job' might be missing the price tags
+          const contractData = contractLookup[job.contract_id];
+          
+          // 2. DEFINE PAYOUT (Safety fallback to 0)
+          const payAmount = contractData?.bounty ? Number(contractData.bounty) : 0;
+          const xpAmount = contractData?.xp_reward ? Number(contractData.xp_reward) : 0;
+
+          // Debugging: This will show you exactly what is happening in the console
+          console.log(`Approving ${job.contract_title}. Paying: $${payAmount} & ${xpAmount}XP`);
+
+          const updates = {};
           updates[`stages.${currentStage}.status`] = "completed";
           updates[`stages.${currentStage}.completedAt`] = new Date().toISOString();
 
+          // CHECK IF ALL STAGES ARE DONE
           if (currentStage >= totalStages) {
               updates['status'] = "completed";
               updates['completedAt'] = serverTimestamp();
+
               const userRef = doc(db, "users", job.student_id);
+              
+              // 3. PAY THE STUDENT
               await updateDoc(userRef, {
-                  currency: increment(job.bounty || 0),
-                  xp: increment(job.contract_xp || job.xp_reward || 0),
+                  currency: increment(payAmount), // <--- Uses the looked-up value
+                  xp: increment(xpAmount),        // <--- Uses the looked-up value
                   completed_jobs: increment(1)
               });
+
               await addDoc(collection(db, "users", job.student_id, "alerts"), {
                   type: "success",
                   message: `Mission "${job.contract_title}" fully completed! Payment sent.`,
@@ -212,9 +238,11 @@ export default function AdminDashboard() {
                   createdAt: serverTimestamp()
               });
           } else {
+              // MOVE TO NEXT STAGE
               const nextStage = Number(currentStage) + 1;
               updates['current_stage'] = nextStage;
               updates[`stages.${nextStage}.status`] = "active"; 
+              
               await addDoc(collection(db, "users", job.student_id, "alerts"), {
                   type: "success",
                   message: `Stage ${currentStage} of "${job.contract_title}" approved! Proceed to Stage ${nextStage}.`,
@@ -222,10 +250,12 @@ export default function AdminDashboard() {
                   createdAt: serverTimestamp()
               });
           }
+
           await updateDoc(doc(db, "active_jobs", job.id), updates);
+
       } catch (error) {
           console.error("Error approving:", error);
-          alert("Error approving mission.");
+          alert("Error approving mission. Check console.");
       }
   };
 
@@ -469,7 +499,7 @@ export default function AdminDashboard() {
                                                 <span className="font-bold text-slate-700">{sub.student_name}</span>
                                                 <span className="text-slate-300">•</span>
                                                 <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-200">
-                                                    {contractLookup[sub.contract_id] || "Unknown Class"}
+                                                    {contractLookup[sub.contract_id]?.classId || "Unknown Class"}
                                                 </span>
                                                 <span className="text-slate-300">•</span>
                                                 <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded">
