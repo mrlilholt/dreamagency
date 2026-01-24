@@ -85,6 +85,15 @@ export default function EditContract() {
                     <input type="number" className="w-full border p-2 rounded" value={formData.bounty} onChange={e => setFormData({...formData, bounty: Number(e.target.value)})} />
                 </div>
                 <div>
+                    <label className="block font-bold mb-1">XP Reward</label>
+                    <input 
+                        type="number" 
+                        className="w-full border p-2 rounded" 
+                        value={formData.xp_reward} 
+                        onChange={e => setFormData({...formData, xp_reward: Number(e.target.value)})} 
+                    />
+                </div>
+                <div>
                     <label className="block font-bold mb-1">Class ID</label>
                     <input className="w-full border p-2 rounded" value={formData.class_id} onChange={e => setFormData({...formData, class_id: e.target.value})} />
                 </div>
