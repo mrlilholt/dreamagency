@@ -37,10 +37,10 @@ import {
     DollarSign,
     RefreshCw, 
     History,
-    Archive
+    Archive,
 } from "lucide-react";
 import AdminNavbar from "../../components/AdminNavbar";
-
+import { CLASS_CODES } from "../../lib/gameConfig";
 // --- ICON LIST (For Shop) ---
 const AVAILABLE_ICONS = [
     "life-buoy", "map-pin", "briefcase", "pen-tool", "clock", 
@@ -96,6 +96,7 @@ const [showDailyMissions, setShowDailyMissions] = useState(false);
 const [missions, setMissions] = useState([]);
 // --- MISSION TABS STATE ---
   const [missionTab, setMissionTab] = useState("active"); // 'active' | 'archive'
+  const [editingMissionId, setEditingMissionId] = useState(null);
 
   // SEPARATE MISSIONS BY DATE
   const todayDate = new Date().toISOString().split('T')[0];
@@ -127,7 +128,50 @@ const [missions, setMissions] = useState([]);
       active_date: new Date().toISOString().split('T')[0]
   });
   
-  
+  // 1. PREP THE FORM FOR EDITING
+  const handleEditClick = (mission) => {
+      setNewMission({
+          title: mission.title,
+          instruction: mission.instruction,
+          code_word: mission.code_word || "",
+          reward_xp: mission.reward_xp,
+          reward_cash: mission.reward_cash,
+          class_id: mission.class_id,
+          active_date: mission.active_date
+      });
+      setEditingMissionId(mission.id); // Triggers "Edit Mode"
+  };
+  // 2. SAVE CHANGES
+  const handleUpdateMission = async (e) => {
+      e.preventDefault();
+      if (!editingMissionId) return;
+
+      try {
+          const missionRef = doc(db, "daily_missions", editingMissionId);
+          await updateDoc(missionRef, newMission);
+          
+          // Reset Form
+          setNewMission({
+              title: "", instruction: "", code_word: "", 
+              reward_xp: 50, reward_cash: 100, 
+              class_id: "Period 1", active_date: new Date().toISOString().split('T')[0]
+          });
+          setEditingMissionId(null); // Exit "Edit Mode"
+          alert("Mission Updated!");
+      } catch (error) {
+          console.error("Error updating mission:", error);
+      }
+  };
+
+  // 3. CANCEL EDIT
+  const handleCancelEdit = () => {
+      setNewMission({
+          title: "", instruction: "", code_word: "", 
+          reward_xp: 50, reward_cash: 100, 
+          class_id: "Period 1", active_date: new Date().toISOString().split('T')[0]
+      });
+      setEditingMissionId(null);
+  };
 
   // FETCH DAILY MISSIONS
   useEffect(() => {
@@ -1062,184 +1106,239 @@ const [missions, setMissions] = useState([]);
 
                 {/* CONTENT GRID */}
                 <div className="p-6 overflow-y-auto bg-slate-50/50">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              
-                        {/* LEFT: CREATE FORM */}
-                        <div className="lg:col-span-1 bg-white p-5 rounded-xl border border-slate-200 shadow-sm h-fit">
-                            <h3 className="font-bold text-slate-700 mb-4 text-xs uppercase tracking-wider border-b pb-2">Deploy New Mission</h3>
-                            <form onSubmit={handleCreateMission} className="space-y-4">
-                                
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Target Class</label>
-                                        <select 
-                                            className="w-full p-2.5 rounded-lg border text-sm bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                            value={newMission.class_id}
-                                            onChange={e => setNewMission({...newMission, class_id: e.target.value})}
-                                        >
-                                            {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Live Date</label>
-                                        <input 
-                                            type="date" 
-                                            className="w-full p-2.5 rounded-lg border text-sm bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                            value={newMission.active_date}
-                                            onChange={e => setNewMission({...newMission, active_date: e.target.value})}
-                                        />
-                                    </div>
-                                </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full overflow-hidden">
+                    
+                    {/* LEFT: FORM (Inputs Restored!) */}
+                    <div className="lg:col-span-1 bg-slate-50 p-6 rounded-xl border border-slate-200 overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                                {editingMissionId ? (
+                                    <><Pencil size={18} className="text-indigo-600"/> Edit Order</>
+                                ) : (
+                                    <><Plus size={18} className="text-indigo-600"/> New Order</>
+                                )}
+                            </h3>
+                            
+                            {/* CANCEL BUTTON */}
+                            {editingMissionId && (
+                                <button 
+                                    onClick={handleCancelEdit}
+                                    className="text-xs font-bold text-red-500 hover:text-red-700 underline"
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
 
+                        {/* FORM START */}
+                        <form onSubmit={editingMissionId ? handleUpdateMission : handleCreateMission} className="space-y-4">
+                            
+                            {/* 1. Target Class & Date */}
+                            <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Mission Title</label>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Target Class</label>
+                                    <select 
+                                        className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                                        value={newMission.class_id}
+                                        onChange={e => setNewMission({...newMission, class_id: e.target.value})}
+                                    >
+                                        {/* Dynamic Options from GameConfig */}
+                                        {Object.values(CLASS_CODES).map((cls) => (
+                                            <option key={cls.id} value={cls.id}>
+                                                {cls.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Active Date</label>
                                     <input 
-                                        placeholder="e.g. 'Mindset Check'" 
-                                        className="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        value={newMission.title}
-                                        onChange={e => setNewMission({...newMission, title: e.target.value})}
-                                        required
+                                        type="date"
+                                        className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                                        value={newMission.active_date}
+                                        onChange={e => setNewMission({...newMission, active_date: e.target.value})}
                                     />
                                 </div>
-                                
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Briefing / Instructions</label>
-                                    <textarea 
-                                        placeholder="What is the objective?" 
-                                        className="w-full p-2.5 rounded-lg border text-sm h-24 focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
-                                        value={newMission.instruction}
-                                        onChange={e => setNewMission({...newMission, instruction: e.target.value})}
-                                        required
-                                    />
-                                </div>
+                            </div>
 
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Passcode (Optional)</label>
+                            {/* 2. Mission Title */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Mission Title</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="e.g. Operation: Deep Freeze"
+                                    className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 placeholder:text-slate-300 focus:border-indigo-500 outline-none"
+                                    value={newMission.title}
+                                    onChange={e => setNewMission({...newMission, title: e.target.value})}
+                                />
+                            </div>
+
+                            {/* 3. Instructions */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Briefing / Instructions</label>
+                                <textarea 
+                                    rows="3"
+                                    placeholder="Describe the objective..."
+                                    className="w-full p-2 rounded-lg border border-slate-300 text-sm text-slate-600 placeholder:text-slate-300 focus:border-indigo-500 outline-none resize-none"
+                                    value={newMission.instruction}
+                                    onChange={e => setNewMission({...newMission, instruction: e.target.value})}
+                                />
+                            </div>
+
+                            {/* 4. Code Word */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Secret Code (Optional)</label>
+                                <div className="relative">
                                     <input 
-                                        placeholder="REQUIRED to claim reward..." 
-                                        className="w-full p-2.5 rounded-lg border text-sm bg-indigo-50/50 border-indigo-100 font-mono text-indigo-600"
+                                        type="text" 
+                                        placeholder="LEAVE BLANK FOR NONE"
+                                        className="w-full pl-9 p-2 rounded-lg border border-slate-300 text-sm font-mono font-bold text-indigo-600 placeholder:text-slate-300 focus:border-indigo-500 outline-none uppercase"
                                         value={newMission.code_word}
                                         onChange={e => setNewMission({...newMission, code_word: e.target.value})}
                                     />
+                                    <div className="absolute left-3 top-2.5 text-slate-400">#</div>
                                 </div>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">XP Reward</label>
-                                        <input type="number" className="w-full p-2.5 border rounded-lg text-sm"
-                                            value={newMission.reward_xp} onChange={e => setNewMission({...newMission, reward_xp: Number(e.target.value)})}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Cash Reward</label>
-                                        <input type="number" className="w-full p-2.5 border rounded-lg text-sm"
-                                            value={newMission.reward_cash} onChange={e => setNewMission({...newMission, reward_cash: Number(e.target.value)})}
-                                        />
-                                    </div>
-                                </div>
-
-                                <button className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg hover:bg-slate-800 transition flex items-center justify-center gap-2">
-                                    <Rocket size={18} /> Deploy
-                                </button>
-                            </form>
-                        </div>
-
-                        {/* RIGHT: MISSION LOG (Active vs Archive) */}
-                        <div className="lg:col-span-2 flex flex-col h-full">
-                            
-                            {/* TABS HEADER */}
-                            <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-2">
-                                <div className="flex gap-4">
-                                    <button 
-                                        onClick={() => setMissionTab("active")}
-                                        className={`flex items-center gap-2 text-sm font-bold pb-2 transition relative ${
-                                            missionTab === "active" ? "text-indigo-600" : "text-slate-400 hover:text-slate-600"
-                                        }`}
-                                    >
-                                        <Zap size={16} /> Active / Upcoming
-                                        {missionTab === "active" && <span className="absolute bottom-[-9px] left-0 w-full h-0.5 bg-indigo-600 rounded-full"></span>}
-                                    </button>
-
-                                    <button 
-                                        onClick={() => setMissionTab("archive")}
-                                        className={`flex items-center gap-2 text-sm font-bold pb-2 transition relative ${
-                                            missionTab === "archive" ? "text-slate-700" : "text-slate-400 hover:text-slate-600"
-                                        }`}
-                                    >
-                                        <History size={16} /> Mission Archive
-                                        {missionTab === "archive" && <span className="absolute bottom-[-9px] left-0 w-full h-0.5 bg-slate-700 rounded-full"></span>}
-                                    </button>
-                                </div>
-                                <span className="text-xs font-bold text-slate-400">
-                                    {missionTab === "active" ? activeMissions.length : archivedMissions.length} Records
-                                </span>
                             </div>
 
-                            {/* MISSION LIST */}
-                            <div className="space-y-3 overflow-y-auto max-h-[500px] pr-2">
-                                {(missionTab === "active" ? activeMissions : archivedMissions).length === 0 ? (
-                                    <div className="text-slate-400 text-sm italic p-8 border-2 border-dashed rounded-xl text-center bg-slate-50">
-                                        {missionTab === "active" ? "No active orders. Deploy one!" : "No history found."}
-                                    </div>
+                            {/* 5. Rewards */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Cash ($)</label>
+                                    <input 
+                                        type="number" 
+                                        className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                                        value={newMission.reward_cash}
+                                        onChange={e => setNewMission({...newMission, reward_cash: Number(e.target.value)})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">XP</label>
+                                    <input 
+                                        type="number" 
+                                        className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                                        value={newMission.reward_xp}
+                                        onChange={e => setNewMission({...newMission, reward_xp: Number(e.target.value)})}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* SUBMIT BUTTON */}
+                            <button 
+                                type="submit"
+                                className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition flex items-center justify-center gap-2 ${
+                                    editingMissionId 
+                                    ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200" 
+                                    : "bg-slate-800 hover:bg-slate-900 shadow-slate-300"
+                                }`}
+                            >
+                                {editingMissionId ? (
+                                    <><Pencil size={18} /> Save Changes</>
                                 ) : (
-                                    (missionTab === "active" ? activeMissions : archivedMissions).map(m => (
-                                        <div key={m.id} className={`flex items-start gap-4 p-4 border rounded-xl shadow-sm transition group ${missionTab === 'archive' ? 'bg-slate-50 border-slate-200 opacity-80 hover:opacity-100' : 'bg-white border-slate-200 hover:border-indigo-300'}`}>
-                                            
-                                            {/* Date Badge */}
-                                            <div className={`text-center px-3 py-2 rounded-lg min-w-[70px] shrink-0 border ${missionTab === 'archive' ? 'bg-slate-200 text-slate-500 border-slate-300' : 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
-                                                <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">
-                                                    {new Date(m.active_date + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short'})}
-                                                </div>
-                                                <div className="text-lg font-black leading-none mt-1">
-                                                    {m.active_date.slice(5)}
-                                                </div>
-                                                {missionTab === 'archive' && <span className="text-[9px] uppercase font-bold text-slate-400 block mt-1">{m.active_date.slice(0,4)}</span>}
-                                            </div>
-
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded border border-slate-300 uppercase tracking-wide">
-                                                        {m.class_id}
-                                                    </span>
-                                                    <h4 className="font-bold text-slate-800 truncate">{m.title}</h4>
-                                                </div>
-                                                <p className="text-sm text-slate-500 line-clamp-2 mb-2">
-                                                    {m.instruction} 
-                                                </p>
-                                                <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
-                                                    <span className="flex items-center gap-1"><Zap size={12}/> {m.reward_xp}</span>
-                                                    <span className="flex items-center gap-1"><DollarSign size={12}/> ${m.reward_cash}</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex flex-col gap-2">
-                                                {/* REDEPLOY BUTTON (Only for Archive) */}
-                                                {missionTab === "archive" && (
-                                                    <button 
-                                                        onClick={() => handleRedeploy(m)} 
-                                                        className="text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white p-2 rounded-lg transition"
-                                                        title="Redeploy Mission (Copy to Form)"
-                                                    >
-                                                        <RefreshCw size={18} />
-                                                    </button>
-                                                )}
-
-                                                {/* DELETE BUTTON */}
-                                                <button 
-                                                    onClick={() => handleDeleteMission(m.id)} 
-                                                    className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition"
-                                                    title="Permanently Delete"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))
+                                    <><Rocket size={18} /> Deploy Mission</>
                                 )}
-                            </div>
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* RIGHT: MISSION LOG (The List) */}
+                    <div className="lg:col-span-2 flex flex-col h-full">
+                        
+                        {/* HEADER & TOGGLE */}
+                        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+                            <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
+                                {viewArchive ? "Mission Archives" : "Active Orders"}
+                            </h3>
+                            
+                            <button 
+                                onClick={() => setViewArchive(!viewArchive)}
+                                className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-indigo-600 transition"
+                            >
+                                {viewArchive ? (
+                                    <>View Active ({activeMissions.length}) <ArrowRight size={14}/></>
+                                ) : (
+                                    <><History size={14}/> View History</>
+                                )}
+                            </button>
                         </div>
 
+                        {/* THE LIST */}
+                        <div className="space-y-3 overflow-y-auto max-h-[500px] pr-2">
+                            
+                            {/* EMPTY STATE */}
+                            {(viewArchive ? archivedMissions : activeMissions).length === 0 && (
+                                <div className="text-slate-400 text-sm italic p-8 border-2 border-dashed rounded-xl text-center bg-slate-50">
+                                    {viewArchive 
+                                        ? "No past missions found." 
+                                        : "No active orders. Deploy one to start the day!"}
+                                </div>
+                            )}
+
+                            {/* MAPPING THE MISSIONS */}
+                            {(viewArchive ? archivedMissions : activeMissions).map(m => (
+                                <div key={m.id} className={`flex items-start gap-4 p-4 border rounded-xl shadow-sm transition group ${viewArchive ? 'bg-slate-50 border-slate-200 opacity-75' : 'bg-white border-slate-200 hover:border-indigo-300'}`}>
+                                    
+                                    {/* Date Badge */}
+                                    <div className={`text-center px-3 py-2 rounded-lg min-w-[70px] shrink-0 border ${viewArchive ? 'bg-slate-200 text-slate-500 border-slate-300' : 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
+                                        <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">
+                                            {new Date(m.active_date + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short'})}
+                                        </div>
+                                        <div className="text-lg font-black leading-none mt-1">
+                                            {m.active_date.slice(5)}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-wide">
+                                                {m.class_id}
+                                            </span>
+                                            <h4 className="font-bold text-slate-800 truncate">{m.title}</h4>
+                                        </div>
+                                        <p className="text-sm text-slate-500 line-clamp-2 mb-2">
+                                            {m.instruction} 
+                                        </p>
+                                        <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
+                                            <span className="flex items-center gap-1"><Zap size={12}/> {m.reward_xp}</span>
+                                            <span className="flex items-center gap-1"><DollarSign size={12}/> ${m.reward_cash}</span>
+                                            {m.code_word && <span className="text-indigo-400 bg-indigo-50 px-1 rounded border border-indigo-100">PASS: {m.code_word}</span>}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        
+                                        {/* EDIT BUTTON */}
+                                        <button 
+                                            onClick={() => handleEditClick(m)} 
+                                            className="text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition"
+                                            title="Edit Mission"
+                                        >
+                                            <Pencil size={16} />
+                                        </button>
+
+                                        {/* Recycle Button (Only in Archive) */}
+                                        {viewArchive && (
+                                            <button 
+                                                onClick={() => handleRedeploy(m)} 
+                                                className="text-indigo-400 hover:text-white hover:bg-indigo-500 p-2 rounded-lg transition"
+                                                title="Redeploy to Today"
+                                            >
+                                                <RefreshCw size={16} />
+                                            </button>
+                                        )}
+                                        
+                                        {/* Delete Button */}
+                                        <button 
+                                            onClick={() => handleDeleteMission(m.id)} 
+                                            className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
+                </div>
                 </div>
 
             </div>
