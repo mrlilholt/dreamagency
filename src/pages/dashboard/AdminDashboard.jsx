@@ -34,7 +34,10 @@ import {
     RotateCcw,
     Calendar,
     Rocket,
-    DollarSign
+    DollarSign,
+    RefreshCw, 
+    History,
+    Archive
 } from "lucide-react";
 import AdminNavbar from "../../components/AdminNavbar";
 
@@ -88,8 +91,32 @@ export default function AdminDashboard() {
   const [isSaleActive, setIsSaleActive] = useState(false);
   const [discountPercent, setDiscountPercent] = useState(50); // Default 50%
 // --- DAILY MISSIONS STATE ---
+const [viewArchive, setViewArchive] = useState(false);
 const [showDailyMissions, setShowDailyMissions] = useState(false);  
 const [missions, setMissions] = useState([]);
+// --- MISSION TABS STATE ---
+  const [missionTab, setMissionTab] = useState("active"); // 'active' | 'archive'
+
+  // SEPARATE MISSIONS BY DATE
+  const todayDate = new Date().toISOString().split('T')[0];
+  
+  const activeMissions = missions.filter(m => m.active_date >= todayDate);
+  const archivedMissions = missions.filter(m => m.active_date < todayDate);
+  // --- REDEPLOY FUNCTION ---
+  // Takes an old mission and puts it back in the form
+  const handleRedeploy = (mission) => {
+      setNewMission({
+          title: mission.title,
+          instruction: mission.instruction,
+          code_word: mission.code_word || "",
+          reward_xp: mission.reward_xp,
+          reward_cash: mission.reward_cash,
+          class_id: mission.class_id, // Keeps old class, but you can change it
+          active_date: todayDate // Defaults to TODAY
+      });
+      // Optional: Flash a message or focus the form
+      // alert("Mission loaded into form! Adjust Date/Class and Deploy.");
+  };
   const [newMission, setNewMission] = useState({
       title: "",
       instruction: "",
@@ -99,6 +126,8 @@ const [missions, setMissions] = useState([]);
       class_id: "", // We will set this dynamically when loading
       active_date: new Date().toISOString().split('T')[0]
   });
+  
+  
 
   // FETCH DAILY MISSIONS
   useEffect(() => {
@@ -498,42 +527,43 @@ const [missions, setMissions] = useState([]);
                     Open Mission Control
                  </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {missions.length === 0 ? (
-                    <div className="lg:col-span-3 text-slate-400 text-sm italic p-4 border border-dashed rounded-lg text-center">
-                        No active orders. Deploy one to start the day.
-                    </div>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {/* 1. CHECK ACTIVE MISSIONS ONLY */}
+                      {activeMissions.length === 0 ? (
+                          <div className="text-slate-400 text-sm italic p-4 border border-dashed rounded-lg text-center">
+                              No active orders for today or the future.
+                          </div>
                 ) : (
-                    missions.map(m => (
-                        <div key={m.id} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-lg hover:border-indigo-200 transition group shadow-sm">
-                            <div className="flex items-center gap-4 overflow-hidden">
-                                {/* Date Badge */}
-                                <div className="text-center bg-slate-100 px-3 py-1 rounded-lg min-w-[60px]">
-                                    <div className="text-[10px] font-bold text-slate-400 uppercase">
-                                        {new Date(m.active_date + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short'})}
-                                    </div>
-                                    <div className="text-xs font-black text-slate-700">
-                                        {m.active_date.slice(5)}
-                                    </div>
-                                </div>
+                    activeMissions.map(m => (
+                              <div key={m.id} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-lg hover:border-indigo-200 transition group">
+                                  <div className="flex items-center gap-4">
+                                      {/* Date Badge */}
+                                      <div className="text-center bg-slate-100 px-3 py-1 rounded-lg min-w-[80px]">
+                                          <div className="text-xs font-bold text-slate-400 uppercase">
+                                              {new Date(m.active_date + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short'})}
+                                          </div>
+                                          <div className="text-sm font-black text-slate-700">
+                                              {m.active_date.slice(5)}
+                                          </div>
+                                      </div>
 
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 mb-0.5">
-                                        <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">
-                                            {m.class_id}
-                                        </span>
-                                        <h4 className="font-bold text-slate-700 truncate text-sm">{m.title}</h4>
-                                    </div>
-                                    <p className="text-xs text-slate-500 truncate">
-                                        {m.instruction} 
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            <button onClick={() => handleDeleteMission(m.id)} className="text-slate-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100 p-1">
-                                <Trash2 size={16} />
-                            </button>
-                        </div>
+                                      <div className="min-w-0">
+                                          <div className="flex items-center gap-2 mb-1">
+                                              <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
+                                                  {m.class_id}
+                                              </span>
+                                              <h4 className="font-bold text-slate-700 truncate">{m.title}</h4>
+                                          </div>
+                                          <p className="text-xs text-slate-500 truncate max-w-md">
+                                              {m.instruction} 
+                                          </p>
+                                      </div>
+                                  </div>
+
+                                  <button onClick={() => handleDeleteMission(m.id)} className="text-slate-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100">
+                                      <Trash2 size={18} />
+                                  </button>
+                              </div>
                     ))
                 )}
             </div>
@@ -1114,30 +1144,61 @@ const [missions, setMissions] = useState([]);
                             </form>
                         </div>
 
-                        {/* RIGHT: UPCOMING SCHEDULE */}
-                        <div className="lg:col-span-2">
-                            <h3 className="font-bold text-slate-700 mb-4 text-xs uppercase tracking-wider border-b pb-2">Active Mission Log</h3>
-                            <div className="space-y-3">
-                                {missions.length === 0 ? (
+                        {/* RIGHT: MISSION LOG (Active vs Archive) */}
+                        <div className="lg:col-span-2 flex flex-col h-full">
+                            
+                            {/* TABS HEADER */}
+                            <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-2">
+                                <div className="flex gap-4">
+                                    <button 
+                                        onClick={() => setMissionTab("active")}
+                                        className={`flex items-center gap-2 text-sm font-bold pb-2 transition relative ${
+                                            missionTab === "active" ? "text-indigo-600" : "text-slate-400 hover:text-slate-600"
+                                        }`}
+                                    >
+                                        <Zap size={16} /> Active / Upcoming
+                                        {missionTab === "active" && <span className="absolute bottom-[-9px] left-0 w-full h-0.5 bg-indigo-600 rounded-full"></span>}
+                                    </button>
+
+                                    <button 
+                                        onClick={() => setMissionTab("archive")}
+                                        className={`flex items-center gap-2 text-sm font-bold pb-2 transition relative ${
+                                            missionTab === "archive" ? "text-slate-700" : "text-slate-400 hover:text-slate-600"
+                                        }`}
+                                    >
+                                        <History size={16} /> Mission Archive
+                                        {missionTab === "archive" && <span className="absolute bottom-[-9px] left-0 w-full h-0.5 bg-slate-700 rounded-full"></span>}
+                                    </button>
+                                </div>
+                                <span className="text-xs font-bold text-slate-400">
+                                    {missionTab === "active" ? activeMissions.length : archivedMissions.length} Records
+                                </span>
+                            </div>
+
+                            {/* MISSION LIST */}
+                            <div className="space-y-3 overflow-y-auto max-h-[500px] pr-2">
+                                {(missionTab === "active" ? activeMissions : archivedMissions).length === 0 ? (
                                     <div className="text-slate-400 text-sm italic p-8 border-2 border-dashed rounded-xl text-center bg-slate-50">
-                                        No active orders in the database.
+                                        {missionTab === "active" ? "No active orders. Deploy one!" : "No history found."}
                                     </div>
                                 ) : (
-                                    missions.map(m => (
-                                        <div key={m.id} className="flex items-start gap-4 p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-indigo-300 transition group">
+                                    (missionTab === "active" ? activeMissions : archivedMissions).map(m => (
+                                        <div key={m.id} className={`flex items-start gap-4 p-4 border rounded-xl shadow-sm transition group ${missionTab === 'archive' ? 'bg-slate-50 border-slate-200 opacity-80 hover:opacity-100' : 'bg-white border-slate-200 hover:border-indigo-300'}`}>
+                                            
                                             {/* Date Badge */}
-                                            <div className="text-center bg-slate-100 px-3 py-2 rounded-lg min-w-[70px] shrink-0 border border-slate-200">
-                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                            <div className={`text-center px-3 py-2 rounded-lg min-w-[70px] shrink-0 border ${missionTab === 'archive' ? 'bg-slate-200 text-slate-500 border-slate-300' : 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
+                                                <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">
                                                     {new Date(m.active_date + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short'})}
                                                 </div>
-                                                <div className="text-lg font-black text-slate-700 leading-none mt-1">
+                                                <div className="text-lg font-black leading-none mt-1">
                                                     {m.active_date.slice(5)}
                                                 </div>
+                                                {missionTab === 'archive' && <span className="text-[9px] uppercase font-bold text-slate-400 block mt-1">{m.active_date.slice(0,4)}</span>}
                                             </div>
 
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 uppercase tracking-wide">
+                                                    <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded border border-slate-300 uppercase tracking-wide">
                                                         {m.class_id}
                                                     </span>
                                                     <h4 className="font-bold text-slate-800 truncate">{m.title}</h4>
@@ -1146,19 +1207,32 @@ const [missions, setMissions] = useState([]);
                                                     {m.instruction} 
                                                 </p>
                                                 <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
-                                                    <span className="flex items-center gap-1"><Zap size={12}/> {m.reward_xp} XP</span>
+                                                    <span className="flex items-center gap-1"><Zap size={12}/> {m.reward_xp}</span>
                                                     <span className="flex items-center gap-1"><DollarSign size={12}/> ${m.reward_cash}</span>
-                                                    {m.code_word && <span className="text-indigo-500 bg-indigo-50 px-1.5 rounded font-mono border border-indigo-100">PASS: {m.code_word}</span>}
                                                 </div>
                                             </div>
 
-                                            <button 
-                                                onClick={() => handleDeleteMission(m.id)} 
-                                                className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition"
-                                                title="Revoke Order"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
+                                            <div className="flex flex-col gap-2">
+                                                {/* REDEPLOY BUTTON (Only for Archive) */}
+                                                {missionTab === "archive" && (
+                                                    <button 
+                                                        onClick={() => handleRedeploy(m)} 
+                                                        className="text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white p-2 rounded-lg transition"
+                                                        title="Redeploy Mission (Copy to Form)"
+                                                    >
+                                                        <RefreshCw size={18} />
+                                                    </button>
+                                                )}
+
+                                                {/* DELETE BUTTON */}
+                                                <button 
+                                                    onClick={() => handleDeleteMission(m.id)} 
+                                                    className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition"
+                                                    title="Permanently Delete"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
                                         </div>
                                     ))
                                 )}
