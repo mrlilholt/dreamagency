@@ -4,7 +4,8 @@ import { db } from "../lib/firebase";
 import { doc, onSnapshot, collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore"; // <--- Updated imports
 import Navbar from "../components/Navbar";
 import { 
-    Shield, Lock, Calendar, Star, User, Trophy, Medal, Crown, Zap, Target, Award, Rocket, Heart, Flag, DollarSign, Mail, Send, X 
+    Shield, Lock, Calendar, Star, User, Trophy, Medal, Crown, Zap, Target, Award, Rocket, Heart, Flag, DollarSign, Mail, Send, X, Bomb,            // <--- ADD THIS
+    AlertTriangle  
 } from "lucide-react";
 
 // --- ICON MAPPER ---
@@ -50,6 +51,35 @@ export default function AgentProfile() {
 
     return () => unsubUser();
   }, [user]);
+
+// --- EASTER EGG STATE ---
+  const [panicMode, setPanicMode] = useState(false);
+  const [countdown, setCountdown] = useState(5);
+  const [exploded, setExploded] = useState(false);
+
+  // THE COUNTDOWN EFFECT
+  useEffect(() => {
+    let timer;
+    if (panicMode && countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    } else if (countdown === 0) {
+      setExploded(true);
+    }
+    return () => clearTimeout(timer);
+  }, [panicMode, countdown]);
+
+  const triggerSelfDestruct = () => {
+      setPanicMode(true);
+      setCountdown(5); // Reset timer
+      setExploded(false);
+  };
+
+  const closeSimulation = () => {
+      setPanicMode(false);
+      setExploded(false);
+      setCountdown(5);
+  };
+
   const handleSendSuggestion = async (e) => {
       e.preventDefault();
       if (!suggestionText.trim()) return;
@@ -157,7 +187,15 @@ export default function AgentProfile() {
             <div className="relative bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
                 {/* Background Glow */}
                 <div className="absolute -right-6 -bottom-6 bg-blue-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all"></div>
-
+                    {/* --- SECRET BUTTON --- */}
+                <button 
+                    onClick={triggerSelfDestruct}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-20 hover:!opacity-100 transition-opacity text-red-500"
+                    title="DO NOT PRESS"
+                >
+                    <Bomb size={16} />
+                </button>
+                {/* --------------------- */}
                 <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-2 text-blue-600">
                         <div className="p-2 bg-blue-100 rounded-lg">
@@ -313,6 +351,50 @@ export default function AgentProfile() {
                 </form>
 
             </div>
+        </div>
+      )}
+      {/* --- EASTER EGG: SELF DESTRUCT SEQUENCE --- */}
+      {panicMode && (
+        <div className="fixed inset-0 z-[100] bg-red-600 flex flex-col items-center justify-center text-white animate-in fade-in duration-300">
+            
+            {/* STAGE 1: THE COUNTDOWN */}
+            {!exploded && (
+                <div className="text-center space-y-8 animate-pulse">
+                    <AlertTriangle size={80} className="mx-auto mb-4" />
+                    <h1 className="text-6xl font-black uppercase tracking-widest">
+                        Warning
+                    </h1>
+                    <p className="text-2xl font-mono uppercase">
+                        Self-Destruct Sequence Initiated
+                    </p>
+                    <div className="text-[150px] font-black font-mono leading-none">
+                        0:0{countdown}
+                    </div>
+                    <p className="text-white/50 animate-bounce mt-10">
+                        (Do not panic)
+                    </p>
+                </div>
+            )}
+
+            {/* STAGE 2: THE AFTERMATH */}
+            {exploded && (
+                <div className="text-center max-w-lg p-8 bg-black/20 backdrop-blur-md rounded-3xl border border-white/20 animate-in zoom-in duration-300">
+                    <div className="bg-white text-red-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl shadow-xl">
+                        😅
+                    </div>
+                    <h2 className="text-3xl font-black mb-4">Simulation Complete</h2>
+                    <p className="text-xl opacity-90 mb-8 leading-relaxed">
+                        "Courage is grace under pressure."<br/>
+                        <span className="text-sm opacity-60">- Ernest Hemingway</span>
+                    </p>
+                    <button 
+                        onClick={closeSimulation}
+                        className="bg-white text-red-600 px-8 py-3 rounded-xl font-black uppercase tracking-widest hover:bg-red-50 transition shadow-lg"
+                    >
+                        Return to work lol
+                    </button>
+                </div>
+            )}
         </div>
       )}
     </div>
