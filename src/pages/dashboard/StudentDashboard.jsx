@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { db } from "../../lib/firebase";
-import { collection, query, where, onSnapshot, doc } from "firebase/firestore"; 
+import {    collection, 
+            query, 
+            where, 
+            onSnapshot, 
+            doc, 
+            getDocs, 
+            updateDoc, 
+            increment, 
+            arrayUnion } from "firebase/firestore"; 
 import { 
   Briefcase, 
   DollarSign, 
@@ -13,7 +21,11 @@ import {
   ArrowRight, 
   Trophy,     
   PlayCircle,
-  Lock // <--- Added Lock icon for empty state
+  Lock,
+  FileText, 
+  Unlock, 
+  Star, 
+  X
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
@@ -24,11 +36,17 @@ export default function StudentDashboard() {
   
   const [contracts, setContracts] = useState([]);
   const [activeJobs, setActiveJobs] = useState({}); 
+// --- NEW: DAILY MISSION STATE ---
+  const [dailyMission, setDailyMission] = useState(null);
+  const [showMissionModal, setShowMissionModal] = useState(false);
+  const [missionCode, setMissionCode] = useState("");
+  const [missionError, setMissionError] = useState("");
 
   // --- LIVE WALLET STATE ---
   const [stats, setStats] = useState({ 
     currency: userData?.currency || 0, 
-    xp: userData?.xp || 0 
+    xp: userData?.xp || 0,
+    completed_missions: [] 
   });
 
  // --- STATE FOR CLASSES (New) ---
@@ -45,9 +63,9 @@ export default function StudentDashboard() {
             // A. Update Stats
             setStats({
                 currency: data.currency || 0,
-                xp: data.xp || 0
+                xp: data.xp || 0,
+                completed_missions: data.completed_missions || []
             });
-
             // B. Update Class List
             // If the array exists, use it. If not, use the single class_id.
             if (data.enrolled_classes && data.enrolled_classes.length > 0) {
@@ -59,6 +77,41 @@ export default function StudentDashboard() {
     });
     return () => unsubscribe();
   }, [user]);
+
+  // 2. CHECK FOR DAILY MISSIONS (The Intercept)
+  useEffect(() => {
+      // Wait until we know the student's classes
+      if (allowedClasses.length === 0) return;
+
+      const checkMissions = async () => {
+          const today = new Date().toISOString().split('T')[0];
+          
+          // Query: Is there a mission for TODAY?
+          const q = query(
+              collection(db, "daily_missions"), 
+              where("active_date", "==", today)
+          );
+
+          const snap = await getDocs(q);
+          const missions = snap.docs.map(d => ({id: d.id, ...d.data()}));
+
+          // Filter: Is there a mission for MY class?
+          // (Checks if the mission's class_id matches ANY of the student's allowed classes)
+          const validMission = missions.find(m => allowedClasses.includes(m.class_id));
+
+          if (validMission) {
+              // Check if I already did it
+              const alreadyDone = stats.completed_missions.includes(validMission.id);
+              
+              if (!alreadyDone) {
+                  setDailyMission(validMission);
+                  setShowMissionModal(true); // <--- TRIGGER THE POPUP
+              }
+          }
+      };
+
+      checkMissions();
+  }, [allowedClasses, stats.completed_missions]); // Re-run if classes load or if we finish a mission
 
   // 2. LIVE LISTENER: Contracts (Depends on allowedClasses)
   useEffect(() => {
@@ -103,6 +156,38 @@ export default function StudentDashboard() {
     });
     return () => unsubscribe();
   }, [user]);// <--- dependency ensures it updates if user data changes
+
+  const handleClaimMission = async (e) => {
+      e.preventDefault();
+      setMissionError("");
+
+      // 1. Check Password (If mission has one)
+      if (dailyMission.code_word) {
+          if (missionCode.toUpperCase().trim() !== dailyMission.code_word.toUpperCase()) {
+              setMissionError("INCORRECT PASSCODE.");
+              return;
+          }
+      }
+
+      try {
+          // 2. Reward the Student
+          const userRef = doc(db, "users", user.uid);
+          await updateDoc(userRef, {
+              currency: increment(dailyMission.reward_cash),
+              xp: increment(dailyMission.reward_xp),
+              completed_missions: arrayUnion(dailyMission.id) // Mark done so popup never comes back
+          });
+
+          // 3. Success Animation
+          setShowMissionModal(false);
+          setMissionCode("");
+          alert(`MISSION COMPLETE.\n+${dailyMission.reward_xp} XP\n+$${dailyMission.reward_cash}`);
+          
+      } catch (err) {
+          console.error("Error claiming mission:", err);
+          setMissionError("Connection failed. Try again.");
+      }
+  };
 
 // --- 🛡️ THE GATEKEEPER LOGIC 🛡️ ---
   // This filters the raw "contracts" list before we map over it
@@ -274,6 +359,97 @@ export default function StudentDashboard() {
             </div>
         )}
       </div>
+      {/* --- TOP SECRET MISSION POPUP --- */}
+      {showMissionModal && dailyMission && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
+            
+            {/* MANILA FOLDER UI */}
+            <div className="bg-[#fdf6e3] w-full max-w-lg rounded-sm shadow-2xl overflow-hidden relative rotate-1 border border-[#d1c7ad]">
+                
+                {/* Folder Tab */}
+                <div className="absolute top-0 left-0 bg-[#e6dcc3] w-1/3 h-8 rounded-br-xl border-r border-b border-[#d1c7ad] flex items-center justify-center">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500/50 uppercase">Confidential</span>
+                </div>
+
+                {/* "Classified" Stamp */}
+                <div className="absolute top-6 right-6 border-4 border-red-600/20 text-red-600/20 font-black text-4xl uppercase -rotate-12 px-4 py-2 pointer-events-none select-none">
+                    Classified
+                </div>
+
+                {/* Close Button (In case they want to ignore it) */}
+                <button 
+                    onClick={() => setShowMissionModal(false)}
+                    className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 z-20"
+                >
+                    <X size={20} />
+                </button>
+
+                <div className="p-8 pt-12">
+                    
+                    {/* Header */}
+                    <div className="text-center mb-6">
+                        <div className="inline-flex items-center gap-2 bg-slate-900 text-white px-3 py-1 rounded text-xs font-bold uppercase tracking-wider mb-2">
+                            <Zap size={12} className="text-yellow-400"/> Priority Message
+                        </div>
+                        <h2 className="text-2xl font-black text-slate-800 uppercase leading-none mb-1">
+                            {dailyMission.title}
+                        </h2>
+                        <p className="text-xs font-mono text-slate-500 uppercase tracking-widest">
+                            Target: {dailyMission.class_id} // {dailyMission.active_date}
+                        </p>
+                    </div>
+
+                    {/* Instructions */}
+                    <div className="bg-white p-6 border-2 border-slate-200 border-dashed rounded-xl mb-6 font-mono text-sm text-slate-700 leading-relaxed shadow-inner">
+                        {dailyMission.instruction}
+                    </div>
+
+                    {/* Rewards */}
+                    <div className="flex justify-center gap-4 mb-6">
+                        <div className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold flex items-center gap-2 border border-green-200">
+                            <DollarSign size={18} /> ${dailyMission.reward_cash}
+                        </div>
+                        <div className="bg-indigo-100 text-indigo-800 px-4 py-2 rounded-lg font-bold flex items-center gap-2 border border-indigo-200">
+                            <Star size={18} /> {dailyMission.reward_xp} XP
+                        </div>
+                    </div>
+
+                    {/* Interaction Area */}
+                    <form onSubmit={handleClaimMission}>
+                        {dailyMission.code_word && (
+                            <div className="mb-4">
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 text-center">
+                                    Input Security Code
+                                </label>
+                                <input 
+                                    type="text" 
+                                    placeholder="ENTER CODE WORD..."
+                                    className="w-full bg-slate-800 text-green-400 font-mono text-center p-3 rounded-lg border-2 border-slate-700 focus:border-green-500 outline-none uppercase tracking-widest placeholder:text-slate-600 transition-colors"
+                                    value={missionCode}
+                                    onChange={e => setMissionCode(e.target.value)}
+                                    autoFocus
+                                />
+                            </div>
+                        )}
+
+                        {missionError && (
+                            <p className="text-center text-red-600 font-bold text-sm mb-4 animate-pulse">
+                                ⚠️ {missionError}
+                            </p>
+                        )}
+
+                        <button 
+                            type="submit"
+                            className="w-full bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:shadow-xl transition flex items-center justify-center gap-2"
+                        >
+                            <Unlock size={18} /> CLAIM REWARD
+                        </button>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 }

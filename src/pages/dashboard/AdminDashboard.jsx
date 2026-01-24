@@ -31,7 +31,10 @@ import {
     Filter,
     Percent,     
     TrendingDown,
-    RotateCcw // <--- ADDED THIS MISSING IMPORT
+    RotateCcw,
+    Calendar,
+    Rocket,
+    DollarSign
 } from "lucide-react";
 import AdminNavbar from "../../components/AdminNavbar";
 
@@ -84,7 +87,60 @@ export default function AdminDashboard() {
   // --- MARKET CRASH STATE ---
   const [isSaleActive, setIsSaleActive] = useState(false);
   const [discountPercent, setDiscountPercent] = useState(50); // Default 50%
+// --- DAILY MISSIONS STATE ---
+const [showDailyMissions, setShowDailyMissions] = useState(false);  
+const [missions, setMissions] = useState([]);
+  const [newMission, setNewMission] = useState({
+      title: "",
+      instruction: "",
+      code_word: "",
+      reward_xp: 50,
+      reward_cash: 100,
+      class_id: "", // We will set this dynamically when loading
+      active_date: new Date().toISOString().split('T')[0]
+  });
 
+  // FETCH DAILY MISSIONS
+  useEffect(() => {
+      const q = query(collection(db, "daily_missions"), orderBy("active_date", "desc"));
+      const unsub = onSnapshot(q, (snap) => {
+          setMissions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+      return () => unsub();
+  }, []);
+
+  // AUTO-SELECT FIRST CLASS (Once availableClasses loads)
+  useEffect(() => {
+      if(availableClasses.length > 0 && !newMission.class_id) {
+          setNewMission(prev => ({ ...prev, class_id: availableClasses[0] }));
+      }
+  }, [availableClasses]);
+
+  const handleCreateMission = async (e) => {
+      e.preventDefault();
+      try {
+          // Safety Check: ensure we have a class selected
+          const targetClass = newMission.class_id || availableClasses[0] || "Unassigned";
+
+          await addDoc(collection(db, "daily_missions"), {
+              ...newMission,
+              class_id: targetClass,
+              createdAt: serverTimestamp()
+          });
+          alert("Mission Deployed!");
+          // Reset form (keep date/class for rapid-fire entry)
+          setNewMission({ ...newMission, title: "", instruction: "", code_word: "" }); 
+      } catch (err) {
+          console.error(err);
+          alert("Error creating mission");
+      }
+  };
+
+  const handleDeleteMission = async (id) => {
+      if(confirm("Delete this mission?")) {
+          await deleteDoc(doc(db, "daily_missions", id));
+      }
+  };
   // --- LISTENERS ---
   useEffect(() => {
     // 1. Fetch Submissions (Active Jobs)
@@ -395,40 +451,91 @@ export default function AdminDashboard() {
                 <h1 className="text-3xl font-black text-slate-900">HQ Dashboard</h1>
                 <p className="text-slate-500">Overview of agency performance and pending tasks.</p>
             </div>
-            {/* --- NEW INBOX BUTTON --- */}
-          <button 
-            onClick={() => setShowInbox(true)}
-            className="relative bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition group"
-          >
-            <Inbox className="text-slate-600 group-hover:text-indigo-600" />
             
-            {/* Red Dot Notification if unread messages exist */}
-            {suggestions.some(s => !s.read) && (
-                <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></span>
-            )}
-          </button>
-            
-            <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-3">
+                {/* INBOX BUTTON */}
                 <button 
-                    onClick={() => setActiveTab("approvals")}
-                    className={`px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition ${
-                        activeTab === "approvals" ? "bg-indigo-100 text-indigo-700" : "text-slate-500 hover:text-slate-900"
-                    }`}
+                    onClick={() => setShowInbox(true)}
+                    className="relative bg-white p-2 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition group h-[42px] w-[42px] flex items-center justify-center"
                 >
-                    <Inbox size={16}/> 
-                    Approvals 
-                    {submissions.length > 0 && (
-                        <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{submissions.length}</span>
+                    <Inbox className="text-slate-600 group-hover:text-indigo-600" size={20} />
+                    {suggestions.some(s => !s.read) && (
+                        <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
                     )}
                 </button>
-                <button 
-                    onClick={() => setActiveTab("shop")}
-                    className={`px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition ${
-                        activeTab === "shop" ? "bg-emerald-100 text-emerald-700" : "text-slate-500 hover:text-slate-900"
-                    }`}
-                >
-                    <ShoppingBag size={16}/> Market
-                </button>
+
+                {/* TABS */}
+                <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                    <button 
+                        onClick={() => setActiveTab("approvals")}
+                        className={`px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition ${
+                            activeTab === "approvals" ? "bg-indigo-100 text-indigo-700" : "text-slate-500 hover:text-slate-900"
+                        }`}
+                    >
+                        <Inbox size={16}/> 
+                        Approvals 
+                        {submissions.length > 0 && (
+                            <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{submissions.length}</span>
+                        )}
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab("shop")}
+                        className={`px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition ${
+                            activeTab === "shop" ? "bg-emerald-100 text-emerald-700" : "text-slate-500 hover:text-slate-900"
+                        }`}
+                    >
+                        <ShoppingBag size={16}/> Market
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {/* MISSION LOG */}
+        <div className="mb-8">
+            <div className="flex justify-between items-center mb-3">
+                 <h3 className="font-bold text-slate-700 text-sm uppercase">Mission Log (Newest First)</h3>
+                 <button onClick={() => setShowDailyMissions(true)} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition">
+                    Open Mission Control
+                 </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {missions.length === 0 ? (
+                    <div className="lg:col-span-3 text-slate-400 text-sm italic p-4 border border-dashed rounded-lg text-center">
+                        No active orders. Deploy one to start the day.
+                    </div>
+                ) : (
+                    missions.map(m => (
+                        <div key={m.id} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-lg hover:border-indigo-200 transition group shadow-sm">
+                            <div className="flex items-center gap-4 overflow-hidden">
+                                {/* Date Badge */}
+                                <div className="text-center bg-slate-100 px-3 py-1 rounded-lg min-w-[60px]">
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase">
+                                        {new Date(m.active_date + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short'})}
+                                    </div>
+                                    <div className="text-xs font-black text-slate-700">
+                                        {m.active_date.slice(5)}
+                                    </div>
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                        <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">
+                                            {m.class_id}
+                                        </span>
+                                        <h4 className="font-bold text-slate-700 truncate text-sm">{m.title}</h4>
+                                    </div>
+                                    <p className="text-xs text-slate-500 truncate">
+                                        {m.instruction} 
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <button onClick={() => handleDeleteMission(m.id)} className="text-slate-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100 p-1">
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    ))
+                )}
             </div>
         </div>
 
@@ -907,6 +1014,163 @@ export default function AdminDashboard() {
             </div>
         </div>
       )}
-    </div>
+      {/* --- DAILY ORDERS MODAL --- */}
+      {/* --- DAILY ORDERS MODAL --- */}
+      {showDailyMissions && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+                
+                {/* HEADER */}
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                    <h2 className="font-black text-lg text-slate-800 flex items-center gap-2">
+                        <Calendar className="text-indigo-600"/> MISSION CONTROL
+                    </h2>
+                    <button onClick={() => setShowDailyMissions(false)} className="p-2 hover:bg-slate-200 rounded-full transition">
+                        <X size={20} className="text-slate-500" />
+                    </button>
+                </div>
+
+                {/* CONTENT GRID */}
+                <div className="p-6 overflow-y-auto bg-slate-50/50">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              
+                        {/* LEFT: CREATE FORM */}
+                        <div className="lg:col-span-1 bg-white p-5 rounded-xl border border-slate-200 shadow-sm h-fit">
+                            <h3 className="font-bold text-slate-700 mb-4 text-xs uppercase tracking-wider border-b pb-2">Deploy New Mission</h3>
+                            <form onSubmit={handleCreateMission} className="space-y-4">
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Target Class</label>
+                                        <select 
+                                            className="w-full p-2.5 rounded-lg border text-sm bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            value={newMission.class_id}
+                                            onChange={e => setNewMission({...newMission, class_id: e.target.value})}
+                                        >
+                                            {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Live Date</label>
+                                        <input 
+                                            type="date" 
+                                            className="w-full p-2.5 rounded-lg border text-sm bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            value={newMission.active_date}
+                                            onChange={e => setNewMission({...newMission, active_date: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Mission Title</label>
+                                    <input 
+                                        placeholder="e.g. 'Mindset Check'" 
+                                        className="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        value={newMission.title}
+                                        onChange={e => setNewMission({...newMission, title: e.target.value})}
+                                        required
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Briefing / Instructions</label>
+                                    <textarea 
+                                        placeholder="What is the objective?" 
+                                        className="w-full p-2.5 rounded-lg border text-sm h-24 focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+                                        value={newMission.instruction}
+                                        onChange={e => setNewMission({...newMission, instruction: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Passcode (Optional)</label>
+                                    <input 
+                                        placeholder="REQUIRED to claim reward..." 
+                                        className="w-full p-2.5 rounded-lg border text-sm bg-indigo-50/50 border-indigo-100 font-mono text-indigo-600"
+                                        value={newMission.code_word}
+                                        onChange={e => setNewMission({...newMission, code_word: e.target.value})}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase">XP Reward</label>
+                                        <input type="number" className="w-full p-2.5 border rounded-lg text-sm"
+                                            value={newMission.reward_xp} onChange={e => setNewMission({...newMission, reward_xp: Number(e.target.value)})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Cash Reward</label>
+                                        <input type="number" className="w-full p-2.5 border rounded-lg text-sm"
+                                            value={newMission.reward_cash} onChange={e => setNewMission({...newMission, reward_cash: Number(e.target.value)})}
+                                        />
+                                    </div>
+                                </div>
+
+                                <button className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg hover:bg-slate-800 transition flex items-center justify-center gap-2">
+                                    <Rocket size={18} /> Deploy
+                                </button>
+                            </form>
+                        </div>
+
+                        {/* RIGHT: UPCOMING SCHEDULE */}
+                        <div className="lg:col-span-2">
+                            <h3 className="font-bold text-slate-700 mb-4 text-xs uppercase tracking-wider border-b pb-2">Active Mission Log</h3>
+                            <div className="space-y-3">
+                                {missions.length === 0 ? (
+                                    <div className="text-slate-400 text-sm italic p-8 border-2 border-dashed rounded-xl text-center bg-slate-50">
+                                        No active orders in the database.
+                                    </div>
+                                ) : (
+                                    missions.map(m => (
+                                        <div key={m.id} className="flex items-start gap-4 p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-indigo-300 transition group">
+                                            {/* Date Badge */}
+                                            <div className="text-center bg-slate-100 px-3 py-2 rounded-lg min-w-[70px] shrink-0 border border-slate-200">
+                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                    {new Date(m.active_date + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short'})}
+                                                </div>
+                                                <div className="text-lg font-black text-slate-700 leading-none mt-1">
+                                                    {m.active_date.slice(5)}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 uppercase tracking-wide">
+                                                        {m.class_id}
+                                                    </span>
+                                                    <h4 className="font-bold text-slate-800 truncate">{m.title}</h4>
+                                                </div>
+                                                <p className="text-sm text-slate-500 line-clamp-2 mb-2">
+                                                    {m.instruction} 
+                                                </p>
+                                                <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
+                                                    <span className="flex items-center gap-1"><Zap size={12}/> {m.reward_xp} XP</span>
+                                                    <span className="flex items-center gap-1"><DollarSign size={12}/> ${m.reward_cash}</span>
+                                                    {m.code_word && <span className="text-indigo-500 bg-indigo-50 px-1.5 rounded font-mono border border-indigo-100">PASS: {m.code_word}</span>}
+                                                </div>
+                                            </div>
+
+                                            <button 
+                                                onClick={() => handleDeleteMission(m.id)} 
+                                                className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition"
+                                                title="Revoke Order"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+      )}
+      </div>
   );
 }
