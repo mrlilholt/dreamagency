@@ -384,8 +384,8 @@ export default function AgentProfile() {
                     </div>
                     <h2 className="text-3xl font-black mb-4">Simulation Complete</h2>
                     <p className="text-xl opacity-90 mb-8 leading-relaxed">
-                        "Courage is grace under pressure."<br/>
-                        <span className="text-sm opacity-60">- Ernest Hemingway</span>
+                        "You miss 100% of the shots you don't take... - unless you're me."<br/>
+                        <span className="text-sm opacity-60">-Mr. Lilholt</span>
                     </p>
                     <button 
                         onClick={closeSimulation}
