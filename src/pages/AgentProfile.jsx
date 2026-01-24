@@ -4,7 +4,7 @@ import { db } from "../lib/firebase";
 import { doc, onSnapshot, collection, getDocs } from "firebase/firestore"; // <--- Updated imports
 import Navbar from "../components/Navbar";
 import { 
-    Shield, Lock, Calendar, Star, User, Trophy, Medal, Crown, Zap, Target, Award, Rocket, Heart, Flag 
+    Shield, Lock, Calendar, Star, User, Trophy, Medal, Crown, Zap, Target, Award, Rocket, Heart, Flag, DollarSign 
 } from "lucide-react";
 
 // --- ICON MAPPER ---
@@ -100,26 +100,63 @@ export default function AgentProfile() {
 
       <div className="max-w-4xl mx-auto px-6 -mt-10">
         
-        {/* STATS ROW */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-8 mb-8 text-center">
-            <div>
-                <div className="text-2xl font-black text-slate-800">{agentData.currency || 0}</div>
-                <div className="text-xs font-bold text-slate-400 uppercase">Cash On Hand</div>
-            </div>
-            <div>
-                <div className="text-2xl font-black text-slate-800">{agentData.completed_jobs || 0}</div>
-                <div className="text-xs font-bold text-slate-400 uppercase">Missions</div>
-            </div>
-            <div>
-                <div className="text-2xl font-black text-slate-800">
-                    {Object.keys(agentData.badges || {}).length}
+        {/* --- UPGRADED STATS ROW --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            
+            {/* 1. CASH CARD (Emerald Theme) */}
+            <div className="relative bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                {/* Background Glow */}
+                <div className="absolute -right-6 -bottom-6 bg-emerald-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
+                
+                <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-2 text-emerald-600">
+                        <div className="p-2 bg-emerald-100 rounded-lg">
+                            <DollarSign size={20} />
+                        </div>
+                        <span className="font-bold text-xs uppercase tracking-wider text-emerald-700/60">Bankroll</span>
+                    </div>
+                    <div className="text-3xl font-black text-slate-800">
+                        ${(agentData.currency || 0).toLocaleString()}
+                    </div>
                 </div>
-                <div className="text-xs font-bold text-slate-400 uppercase">Medals</div>
             </div>
-            <div>
-                <div className="text-2xl font-black text-slate-800">98%</div>
-                <div className="text-xs font-bold text-slate-400 uppercase">Rating</div>
+
+            {/* 2. MISSIONS CARD (Blue Theme) */}
+            <div className="relative bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                {/* Background Glow */}
+                <div className="absolute -right-6 -bottom-6 bg-blue-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all"></div>
+
+                <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-2 text-blue-600">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                            <Target size={20} />
+                        </div>
+                        <span className="font-bold text-xs uppercase tracking-wider text-blue-700/60">Mission Log</span>
+                    </div>
+                    <div className="text-3xl font-black text-slate-800">
+                        {agentData.completed_jobs || 0}
+                    </div>
+                </div>
             </div>
+
+            {/* 3. MEDALS CARD (Amber Theme) */}
+            <div className="relative bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                {/* Background Glow */}
+                <div className="absolute -right-6 -bottom-6 bg-amber-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all"></div>
+
+                <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-2 text-amber-600">
+                        <div className="p-2 bg-amber-100 rounded-lg">
+                            <Medal size={20} />
+                        </div>
+                        <span className="font-bold text-xs uppercase tracking-wider text-amber-700/60">Honors</span>
+                    </div>
+                    <div className="text-3xl font-black text-slate-800">
+                        {Object.keys(agentData.badges || {}).length}
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         {/* MEDALS / BADGES SECTION */}
