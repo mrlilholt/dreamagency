@@ -11,7 +11,9 @@ import {
   increment,
   serverTimestamp,
   deleteField, 
-  writeBatch   
+  writeBatch,
+  query,    // <--- ADD THIS
+  orderBy   
 } from "firebase/firestore";
 import { 
     CheckCircle, 
@@ -74,7 +76,11 @@ export default function AdminDashboard() {
   const [shopForm, setShopForm] = useState({ 
       title: "", desc: "", price: 0, stock: 0, iconName: "briefcase" 
   });
-  
+
+  // --- NEW: SUGGESTION BOX STATE ---
+  const [suggestions, setSuggestions] = useState([]);
+  const [showInbox, setShowInbox] = useState(false);
+
   // --- MARKET CRASH STATE ---
   const [isSaleActive, setIsSaleActive] = useState(false);
   const [discountPercent, setDiscountPercent] = useState(50); // Default 50%
@@ -156,6 +162,31 @@ export default function AdminDashboard() {
         unsubContracts();
     };
   }, []);
+
+  // LISTEN TO SUGGESTIONS
+  useEffect(() => {
+    // Order by newest first
+    const q = query(collection(db, "suggestions"), orderBy("createdAt", "desc"));
+    
+    const unsub = onSnapshot(q, (snap) => {
+       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+       setSuggestions(list);
+    });
+    return () => unsub();
+  }, []);
+
+  // Helper to mark as read (optional, but nice visual)
+  const markAsRead = async (id, currentStatus) => {
+      if(currentStatus) return; // already read
+      await updateDoc(doc(db, "suggestions", id), { read: true });
+  };
+
+  // Helper to delete message
+  const deleteSuggestion = async (id) => {
+      if(window.confirm("Delete this message?")) {
+          await deleteDoc(doc(db, "suggestions", id));
+      }
+  };
 
   // --- MARKET CRASH LOGIC ---
   const toggleMarketCrash = async () => {
@@ -364,6 +395,18 @@ export default function AdminDashboard() {
                 <h1 className="text-3xl font-black text-slate-900">HQ Dashboard</h1>
                 <p className="text-slate-500">Overview of agency performance and pending tasks.</p>
             </div>
+            {/* --- NEW INBOX BUTTON --- */}
+          <button 
+            onClick={() => setShowInbox(true)}
+            className="relative bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition group"
+          >
+            <Inbox className="text-slate-600 group-hover:text-indigo-600" />
+            
+            {/* Red Dot Notification if unread messages exist */}
+            {suggestions.some(s => !s.read) && (
+                <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></span>
+            )}
+          </button>
             
             <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
                 <button 
@@ -809,6 +852,61 @@ export default function AdminDashboard() {
             </div>
         )}
       </div>
+      {/* --- INBOX MODAL --- */}
+      {showInbox && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[80vh]">
+                
+                {/* Header */}
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                    <h2 className="font-bold text-lg text-slate-700 flex items-center gap-2">
+                        <Inbox size={20} className="text-indigo-600"/> Agent Feedback ({suggestions.length})
+                    </h2>
+                    <button onClick={() => setShowInbox(false)} className="p-2 hover:bg-slate-200 rounded-full transition">
+                        <X size={20} className="text-slate-500" />
+                    </button>
+                </div>
+
+                {/* List of Messages */}
+                <div className="overflow-y-auto p-4 space-y-3 bg-slate-50/50 flex-1">
+                    {suggestions.length === 0 ? (
+                        <div className="text-center py-10 text-slate-400 italic">No messages from the field.</div>
+                    ) : (
+                        suggestions.map(msg => (
+                            <div 
+                                key={msg.id} 
+                                onClick={() => markAsRead(msg.id, msg.read)}
+                                className={`group p-4 rounded-xl border transition-all cursor-pointer relative ${
+                                    msg.read ? "bg-white border-slate-200 opacity-75" : "bg-white border-indigo-200 shadow-sm ring-1 ring-indigo-50"
+                                }`}
+                            >
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-2 h-2 rounded-full ${msg.read ? "bg-slate-300" : "bg-indigo-500"}`}></div>
+                                        <span className="font-bold text-slate-700 text-sm">{msg.agentName || "Unknown Agent"}</span>
+                                        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                                            {msg.createdAt?.toDate().toLocaleDateString() || "Just now"}
+                                        </span>
+                                    </div>
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); deleteSuggestion(msg.id); }}
+                                        className="text-slate-300 hover:text-red-500 transition p-1"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                                
+                                <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap pl-4 border-l-2 border-slate-100">
+                                    {msg.text}
+                                </p>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+            </div>
+        </div>
+      )}
     </div>
   );
 }

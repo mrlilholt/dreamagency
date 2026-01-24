@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { db } from "../lib/firebase";
-import { doc, onSnapshot, collection, getDocs } from "firebase/firestore"; // <--- Updated imports
+import { doc, onSnapshot, collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore"; // <--- Updated imports
 import Navbar from "../components/Navbar";
 import { 
-    Shield, Lock, Calendar, Star, User, Trophy, Medal, Crown, Zap, Target, Award, Rocket, Heart, Flag, DollarSign 
+    Shield, Lock, Calendar, Star, User, Trophy, Medal, Crown, Zap, Target, Award, Rocket, Heart, Flag, DollarSign, Mail, Send, X 
 } from "lucide-react";
 
 // --- ICON MAPPER ---
@@ -28,7 +28,9 @@ export default function AgentProfile() {
   const [agentData, setAgentData] = useState(null);
   const [allBadges, setAllBadges] = useState([]); // <--- New State for Badge Library
   const [loading, setLoading] = useState(true);
-
+  const [showSuggestionBox, setShowSuggestionBox] = useState(false);
+  const [suggestionText, setSuggestionText] = useState("");
+  const [isSending, setIsSending] = useState(false);
   useEffect(() => {
     if (!user) return;
 
@@ -48,6 +50,29 @@ export default function AgentProfile() {
 
     return () => unsubUser();
   }, [user]);
+  const handleSendSuggestion = async (e) => {
+      e.preventDefault();
+      if (!suggestionText.trim()) return;
+
+      setIsSending(true);
+      try {
+          await addDoc(collection(db, "suggestions"), {
+              text: suggestionText,
+              agentName: getAgentName(),
+              agentId: user.uid,
+              createdAt: serverTimestamp(),
+              read: false
+          });
+          
+          alert("Message sent to HQ. Over and out.");
+          setSuggestionText("");
+          setShowSuggestionBox(false);
+      } catch (error) {
+          console.error("Error sending suggestion:", error);
+          alert("Transmission failed. Try again.");
+      }
+      setIsSending(false);
+  };
 
   if (loading || !agentData) return <div className="p-10 text-center">Loading Profile...</div>;
 
@@ -89,6 +114,13 @@ export default function AgentProfile() {
                 </div>
                 <h1 className="text-3xl font-black mb-1">{getAgentName()}</h1>
                 <p className="text-slate-400 text-sm">Agent ID: {user.uid.slice(0,8).toUpperCase()}</p>
+                {/* --- NEW BUTTON: CONTACT HQ --- */}
+                    <button 
+                        onClick={() => setShowSuggestionBox(true)}
+                        className="flex items-center gap-2 px-3 py-1 bg-white/10 hover:bg-white/20 text-white/80 text-xs font-bold uppercase tracking-wider rounded-full transition-all border border-white/10"
+                    >
+                        <Mail size={12} /> Contact HQ
+                    </button>
             </div>
 
             <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm border border-white/10 text-center min-w-[120px]">
@@ -224,6 +256,65 @@ export default function AgentProfile() {
         </div>
 
       </div>
+      {/* --- SUGGESTION BOX MODAL --- */}
+      {showSuggestionBox && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+                
+                {/* Modal Header */}
+                <div className="bg-slate-100 p-4 flex items-center justify-between border-b border-slate-200">
+                    <h3 className="font-black text-slate-700 flex items-center gap-2">
+                        <Mail size={20} className="text-indigo-600"/> 
+                        SECURE LINE TO HQ
+                    </h3>
+                    <button 
+                        onClick={() => setShowSuggestionBox(false)}
+                        className="text-slate-400 hover:text-slate-600 transition"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+
+                {/* Modal Form */}
+                <form onSubmit={handleSendSuggestion} className="p-6">
+                    <p className="text-sm text-slate-500 mb-4">
+                        Have an idea for a new mission? Found a bug? Or just want to say hi? 
+                        Send a secure transmission directly to the Director.
+                    </p>
+
+                    <textarea
+                        value={suggestionText}
+                        onChange={(e) => setSuggestionText(e.target.value)}
+                        placeholder="Type your message here..."
+                        className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none text-slate-700 mb-4"
+                        autoFocus
+                    />
+
+                    <div className="flex justify-end gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setShowSuggestionBox(false)}
+                            className="px-4 py-2 text-slate-500 font-bold text-sm hover:bg-slate-100 rounded-lg"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isSending || !suggestionText.trim()}
+                            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-200"
+                        >
+                            {isSending ? "Transmitting..." : (
+                                <>
+                                    Send Message <Send size={16} />
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+      )}
     </div>
   );
 }
