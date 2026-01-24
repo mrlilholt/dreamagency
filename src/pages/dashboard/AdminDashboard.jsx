@@ -199,58 +199,62 @@ export default function AdminDashboard() {
   // --- APPROVAL ACTIONS ---
   const approveSubmission = async (job) => {
       try {
-          const currentStage = job.current_stage || 1;
+          const currentStage = Number(job.current_stage || 1);
           const totalStages = Object.keys(job.stages || {}).length;
           
-          // 1. GET THE REWARDS FROM THE LOOKUP
-          // We use the lookup we built because the 'job' might be missing the price tags
+          // 1. GET THE REWARDS FROM LOOKUP
           const contractData = contractLookup[job.contract_id];
-          
-          // 2. DEFINE PAYOUT (Safety fallback to 0)
           const payAmount = contractData?.bounty ? Number(contractData.bounty) : 0;
           const xpAmount = contractData?.xp_reward ? Number(contractData.xp_reward) : 0;
 
-          // Debugging: This will show you exactly what is happening in the console
-          console.log(`Approving ${job.contract_title}. Paying: $${payAmount} & ${xpAmount}XP`);
+          console.log(`Approving Stage ${currentStage}. Paying: $${payAmount} & ${xpAmount}XP`);
 
           const updates = {};
+          
+          // A. Mark CURRENT stage as completed
           updates[`stages.${currentStage}.status`] = "completed";
           updates[`stages.${currentStage}.completedAt`] = new Date().toISOString();
 
-          // CHECK IF ALL STAGES ARE DONE
+          // B. PAY THE STUDENT (Happens every time now)
+          const userRef = doc(db, "users", job.student_id);
+          await updateDoc(userRef, {
+              currency: increment(payAmount), 
+              xp: increment(xpAmount),        
+              completed_jobs: increment(1) // Optional: counts stages as "jobs" done
+          });
+
+          // C. CHECK PROGRESS
           if (currentStage >= totalStages) {
+              // --- MISSION COMPLETE ---
               updates['status'] = "completed";
               updates['completedAt'] = serverTimestamp();
 
-              const userRef = doc(db, "users", job.student_id);
-              
-              // 3. PAY THE STUDENT
-              await updateDoc(userRef, {
-                  currency: increment(payAmount), // <--- Uses the looked-up value
-                  xp: increment(xpAmount),        // <--- Uses the looked-up value
-                  completed_jobs: increment(1)
-              });
-
               await addDoc(collection(db, "users", job.student_id, "alerts"), {
                   type: "success",
-                  message: `Mission "${job.contract_title}" fully completed! Payment sent.`,
+                  message: `Mission "${job.contract_title}" COMPLETED! Final Payment: $${payAmount}.`,
                   read: false,
                   createdAt: serverTimestamp()
               });
+
           } else {
-              // MOVE TO NEXT STAGE
-              const nextStage = Number(currentStage) + 1;
+              // --- MOVE TO NEXT STAGE ---
+              const nextStage = currentStage + 1;
+              
+              // *** CRITICAL FIX: Unlock the dashboard ***
+              updates['status'] = "active"; // This removes the "Reviewing" badge
+              
               updates['current_stage'] = nextStage;
               updates[`stages.${nextStage}.status`] = "active"; 
               
               await addDoc(collection(db, "users", job.student_id, "alerts"), {
                   type: "success",
-                  message: `Stage ${currentStage} of "${job.contract_title}" approved! Proceed to Stage ${nextStage}.`,
+                  message: `Stage ${currentStage} approved! You earned $${payAmount}. Proceed to Stage ${nextStage}.`,
                   read: false,
                   createdAt: serverTimestamp()
               });
           }
 
+          // D. PUSH UPDATES TO JOB
           await updateDoc(doc(db, "active_jobs", job.id), updates);
 
       } catch (error) {
