@@ -62,13 +62,29 @@ export default function RewardShop() {
 
     // 2. Shop Items (Real-time to catch the sale immediately)
     const unsubShop = onSnapshot(collection(db, "shop_items"), (snap) => {
-        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const items = snap.docs.map(d => {
+            const data = d.data();
+            return {
+                id: d.id,
+                ...data,
+                // SAFETY: Force these to be numbers immediately
+                // If price is missing or text, it becomes 0.
+                price: Number(data.price) || 0,
+                stock: Number(data.stock) || 0,
+                original_price: data.original_price ? Number(data.original_price) : null
+            };
+        });
+
         // Sort: Cheapest first, but out-of-stock last
         items.sort((a, b) => {
-            if (a.stock === 0) return 1;
-            if (b.stock === 0) return -1;
+            // Move out-of-stock items to the bottom
+            if (a.stock === 0 && b.stock > 0) return 1;
+            if (b.stock === 0 && a.stock > 0) return -1;
+            
+            // Standard price sort
             return a.price - b.price;
         });
+
         setShopItems(items);
         setLoading(false);
     });

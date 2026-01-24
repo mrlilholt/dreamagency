@@ -323,7 +323,8 @@ export default function AdminDashboard() {
   const closeShopForm = () => {
       setIsShopFormOpen(false);
       setEditingItem(null);
-      setShopForm({ title: "", desc: "", price: 0, stock: 0, iconName: "briefcase" });
+      setShopForm({ title: "", desc: "", price: Number(shopForm.price) || 0,
+              stock: Number(shopForm.stock) || 0, iconName: "briefcase" });
   };
 
   // --- FILTERING ---
