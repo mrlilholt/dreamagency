@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { db } from "../lib/firebase";
-import { doc, onSnapshot, collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore"; // <--- Updated imports
+import { doc, onSnapshot, collection, getDocs, addDoc, serverTimestamp, updateDoc, arrayRemove } from "firebase/firestore"; // <--- Updated imports
 import Navbar from "../components/Navbar";
 import { 
     Shield, Lock, Calendar, Star, User, Trophy, Medal, Crown, Zap, Target, Award, Rocket, Heart, Flag, DollarSign, Mail, Send, X, Bomb,            // <--- ADD THIS
-    AlertTriangle  
+    AlertTriangle, Pencil, Save  
 } from "lucide-react";
 
 // --- ICON MAPPER ---
@@ -32,28 +32,79 @@ export default function AgentProfile() {
   const [showSuggestionBox, setShowSuggestionBox] = useState(false);
   const [suggestionText, setSuggestionText] = useState("");
   const [isSending, setIsSending] = useState(false);
+  // --- NAME CHANGE LOGIC ---
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newName, setNewName] = useState("");
+// 1. Logic to save the name
+  const handleUpdateName = async () => {
+      if (!newName.trim()) return;
+      
+      // 1. Find the specific token object in the inventory so we can remove it
+      const tokenObject = agentData.inventory.find(item => item.name === "Identity Scrambler");
+
+      if (!tokenObject) {
+          alert("Security Error: Token not found in inventory.");
+          return;
+      }
+
+      try {
+          const userRef = doc(db, "users", user.uid);
+          
+          await updateDoc(userRef, {
+              displayName: newName,
+              name: newName,
+              // We pass the WHOLE object to arrayRemove so Firestore knows exactly which map to delete
+              inventory: arrayRemove(tokenObject) 
+          });
+
+          setIsEditingName(false);
+          alert("Identity successfully scrambled."); 
+      } catch (error) {
+          console.error("Error updating name:", error);
+          alert("Failed to scramble identity.");
+      }
+  };
+  // Check if they own the item
+const hasNameChangeToken = agentData?.inventory?.some(item => item.name === "Identity Scrambler");
+
   useEffect(() => {
+    // 1. GUARD CLAUSE: Stop if no user is logged in (Fixes "Permission Denied")
     if (!user) return;
 
-    // 1. Listen to User Data (Realtime for when they earn new things)
-    const unsubUser = onSnapshot(doc(db, "users", user.uid), (doc) => {
-      setAgentData(doc.data());
+    setLoading(true);
+
+    // 2. Listen to User Data (Realtime updates for XP, Credits, Inventory)
+    const unsubUser = onSnapshot(doc(db, "users", user.uid), (docSnapshot) => {
+        if (docSnapshot.exists()) {
+            setAgentData(docSnapshot.data());
+        }
+    }, (error) => {
+        console.error("Error listening to agent data:", error);
     });
 
-    // 2. Fetch All Available Badges (Once)
+    // 3. Fetch All Available Badges (One-time fetch)
     const fetchBadges = async () => {
-        const snap = await getDocs(collection(db, "badges"));
-        const badgeList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setAllBadges(badgeList);
-        setLoading(false);
+        try {
+            const snap = await getDocs(collection(db, "badges"));
+            const badgeList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setAllBadges(badgeList);
+        } catch (error) {
+            console.error("Error fetching badges:", error);
+        } finally {
+            setLoading(false);
+        }
     };
+
     fetchBadges();
 
+    // Cleanup listener on unmount or logout
     return () => unsubUser();
   }, [user]);
 
+  
 // --- EASTER EGG STATE ---
-  const [panicMode, setPanicMode] = useState(false);
+  
+const [panicMode, setPanicMode] = useState(false);
   const [countdown, setCountdown] = useState(5);
   const [exploded, setExploded] = useState(false);
 
@@ -142,7 +193,54 @@ export default function AgentProfile() {
                         Level {Math.floor((agentData.xp || 0) / 1000) + 1}
                     </span>
                 </div>
-                <h1 className="text-3xl font-black mb-1">{getAgentName()}</h1>
+{/* DYNAMIC NAME SECTION */}
+                {isEditingName ? (
+                    <div className="flex items-center gap-2 mb-1 animate-in fade-in slide-in-from-left-4">
+                        <input 
+                            type="text" 
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            className="bg-slate-800 text-white font-bold px-3 py-1 rounded border border-slate-600 outline-none focus:border-indigo-500 w-full md:w-auto"
+                            placeholder="New Code Name"
+                            maxLength={20}
+                            autoFocus
+                        />
+                        <button 
+                            onClick={handleUpdateName}
+                            className="bg-green-600 hover:bg-green-500 text-white p-2 rounded transition shadow-lg shadow-green-900/20"
+                            title="Confirm Change (Consumes Token)"
+                        >
+                            <Save size={16} />
+                        </button>
+                        <button 
+                            onClick={() => setIsEditingName(false)}
+                            className="bg-slate-700 hover:bg-slate-600 text-slate-300 p-2 rounded transition"
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-3 mb-1 group">
+                        {/* 1. Show the Name (Checks both fields to prevent "Agent" bug) */}
+                        <h1 className="text-3xl font-black">
+                            {agentData?.displayName || agentData?.name || "Agent"}
+                        </h1>
+                        
+                        {/* 2. Show Button ONLY if they have the token */}
+                        {hasNameChangeToken && (
+                            <button 
+                                onClick={() => {
+                                    setNewName(agentData?.displayName || agentData?.name || "");
+                                    setIsEditingName(true);
+                                }}
+                                className="text-xs font-bold bg-indigo-500/20 text-indigo-200 border border-indigo-500/30 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-500/40 cursor-pointer"
+                            >
+                                <Pencil size={12} /> Scramble ID
+                            </button>
+                        )}
+                    </div>
+                )}
+                
                 <p className="text-slate-400 text-sm">Agent ID: {user.uid.slice(0,8).toUpperCase()}</p>
                 {/* --- NEW BUTTON: CONTACT HQ --- */}
                     <button 

@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
 import { db } from "../../lib/firebase";
-import { collection, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, query, orderBy } from "firebase/firestore";
 import { CLASS_CODES } from "../../lib/gameConfig"; // <--- REMOVED "BADGES"
 import { 
     Users, Filter, Search, Trophy, DollarSign, 
     Briefcase, AlertCircle, Trash2, Gavel, ArrowLeft, ChevronRight, Medal, Send, MessageSquare
 } from "lucide-react";
 import AdminNavbar from "../../components/AdminNavbar";
+import { useAuth } from "../../context/AuthContext";
 
 export default function AdminRoster() {
   // --- STATE ---
   const [students, setStudents] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [availableBadges, setAvailableBadges] = useState([]); // <--- NEW: Dynamic Badges from DB
-
+    const { user } = useAuth();
   const [filterClass, setFilterClass] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState(null); 
@@ -27,7 +28,12 @@ export default function AdminRoster() {
 
   // --- LISTENERS ---
   useEffect(() => {
-    // 1. Listen to Users
+    // 1. GUARD CLAUSE: Stop listeners if no admin is logged in
+    if (!user) return;
+
+    setLoading(true);
+
+    // 2. Listen to Users
     const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
         const userList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         // Sort alphabetically
@@ -38,26 +44,27 @@ export default function AdminRoster() {
         });
         setStudents(userList);
         setLoading(false);
-    });
+    }, (error) => console.error("Roster Error:", error));
 
-    // 2. Listen to Active Jobs (for stats)
+    // 3. Listen to Active Jobs (for stats)
     const unsubJobs = onSnapshot(collection(db, "active_jobs"), (snap) => {
         const jobList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setJobs(jobList);
-    });
+    }, (error) => console.error("Jobs Error:", error));
 
-    // 3. Listen to Badges (The new dynamic list)
+    // 4. Listen to Badges (The new dynamic list)
     const unsubBadges = onSnapshot(collection(db, "badges"), (snap) => {
         const badgeList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setAvailableBadges(badgeList);
-    });
+    }, (error) => console.error("Badges Error:", error));
 
+    // Cleanup all 3 listeners on unmount/logout
     return () => {
         unsubUsers();
         unsubJobs();
         unsubBadges();
     };
-  }, []);
+  }, [user]); // <--- Dependency array now watches 'user'
 
   // --- ACTIONS ---
 
