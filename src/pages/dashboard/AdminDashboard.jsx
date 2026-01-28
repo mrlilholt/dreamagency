@@ -38,6 +38,7 @@ import {
     RefreshCw, 
     History,
     Archive,
+    ArrowRight,
 } from "lucide-react";
 import AdminNavbar from "../../components/AdminNavbar";
 import { CLASS_CODES } from "../../lib/gameConfig";
