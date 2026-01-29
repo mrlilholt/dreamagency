@@ -4,7 +4,6 @@ import { useAuth } from "../context/AuthContext";
 import { db } from "../lib/firebase";
 import { 
     doc, 
-    getDoc, 
     updateDoc, 
     serverTimestamp, 
     onSnapshot 
@@ -23,6 +22,37 @@ import {
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 
+const DEFAULT_STAGE_TEMPLATES = [
+  { name: "Research & Ideate", req: "Submit 3 sketches and research links." },
+  { name: "Proposal", req: "Submit a 1-paragraph proposal." },
+  { name: "Prototype", req: "Submit photo/link of first build." },
+  { name: "Test", req: "Submit testing data/feedback notes." },
+  { name: "Iterate", req: "What changes did you make based on data?" },
+  { name: "Deliver & Reflect", req: "Final project link and reflection." }
+];
+
+const buildStageMapFromList = (stagesList) => {
+  const map = {};
+  stagesList.forEach((stage, index) => {
+    map[index + 1] = { ...stage };
+  });
+  return map;
+};
+
+const normalizeStageMap = (stages) => {
+  if (!stages) return null;
+  if (Array.isArray(stages)) {
+    if (stages.length === 0) return null;
+    return buildStageMapFromList(stages);
+  }
+  if (typeof stages === "object") {
+    const keys = Object.keys(stages);
+    if (keys.length === 0) return null;
+    return stages;
+  }
+  return null;
+};
+
 export default function ContractDetails() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -35,16 +65,17 @@ export default function ContractDetails() {
 
   // 1. Fetch Contract Static Info
   useEffect(() => {
-    const fetchContract = async () => {
-        if (!id) return;
-        const docRef = doc(db, "contracts", id);
-        const snap = await getDoc(docRef);
+    if (!id) return;
+    const docRef = doc(db, "contracts", id);
+    const unsub = onSnapshot(docRef, (snap) => {
         if (snap.exists()) {
             setContract({ id: snap.id, ...snap.data() });
+        } else {
+            setContract(null);
         }
         setLoading(false);
-    };
-    fetchContract();
+    });
+    return () => unsub();
   }, [id]);
 
   // 2. Listen for User's Progress
@@ -68,6 +99,26 @@ export default function ContractDetails() {
     
     // Using setDoc to ensure it creates correctly
     const { setDoc } = await import("firebase/firestore");
+
+    const contractStageMap = normalizeStageMap(contract.stages);
+    const stageDefinitionMap = contractStageMap || buildStageMapFromList(DEFAULT_STAGE_TEMPLATES);
+    const stageNumbers = Object.keys(stageDefinitionMap)
+        .map((num) => Number(num))
+        .filter((num) => Number.isFinite(num))
+        .sort((a, b) => a - b);
+
+    const jobStages = {};
+    stageNumbers.forEach((num, index) => {
+        const stageDef = stageDefinitionMap[num] || stageDefinitionMap[String(num)] || {};
+        jobStages[num] = {
+            name: stageDef.name || `Stage ${num}`,
+            req: stageDef.req || "",
+            status: index === 0 ? "active" : "locked"
+        };
+    });
+
+    const firstStage = stageNumbers[0] || 1;
+
     await setDoc(doc(db, "active_jobs", `${user.uid}_${id}`), {
         student_id: user.uid,
         student_name: user.displayName || user.email,
@@ -77,15 +128,8 @@ export default function ContractDetails() {
         contract_xp: contract.xp_reward,
         status: "in_progress",
         started_at: serverTimestamp(),
-        current_stage: 1,
-        stages: {
-            1: { name: "Research & Ideate", req: "Submit 3 sketches and research links.", status: "pending" },
-            2: { name: "Proposal", req: "Submit a 1-paragraph proposal.", status: "locked" },
-            3: { name: "Prototype", req: "Submit photo/link of first build.", status: "locked" },
-            4: { name: "Test", req: "Submit testing data/feedback notes.", status: "locked" },
-            5: { name: "Iterate", req: "What changes did you make based on data?", status: "locked" },
-            6: { name: "Deliver & Reflect", req: "Final project link and reflection.", status: "locked" }
-        }
+        current_stage: firstStage,
+        stages: jobStages
     });
   };
 
@@ -112,9 +156,17 @@ export default function ContractDetails() {
 
   const isStarted = !!activeJob;
   const currentStageNum = activeJob?.current_stage || 1;
+
+  const contractStageMap = normalizeStageMap(contract?.stages);
+  const activeStageMap = normalizeStageMap(activeJob?.stages);
+  const stageDefinitionMap = contractStageMap || activeStageMap || buildStageMapFromList(DEFAULT_STAGE_TEMPLATES);
+  const stageNumbers = Object.keys(stageDefinitionMap || {})
+      .map((num) => Number(num))
+      .filter((num) => Number.isFinite(num))
+      .sort((a, b) => a - b);
   
   // Calculate Totals to show the massive incentive
-  const totalStages = 6;
+  const totalStages = stageNumbers.length || 0;
   const totalPotentialMoney = (contract.bounty || 0) * totalStages;
   const totalPotentialXP = (contract.xp_reward || 0) * totalStages;
 
@@ -181,7 +233,7 @@ export default function ContractDetails() {
                                 <TrendingUp size={18} className="text-slate-300"/> 
                              </div>
                              <div>
-                                 <span className="block text-lg font-bold text-white leading-none">6 Stages</span>
+                                 <span className="block text-lg font-bold text-white leading-none">{totalStages} Stages</span>
                                  <span className="text-xs text-slate-400 uppercase font-bold">Milestones</span>
                              </div>
                         </div>
@@ -222,15 +274,24 @@ export default function ContractDetails() {
                 <h3 className="text-lg font-black text-slate-800 mb-4 px-2 flex justify-between items-center">
                     <span>Project Milestones</span>
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        Stage {currentStageNum} of 6
+                        Stage {currentStageNum} of {totalStages}
                     </span>
                 </h3>
                 
                 <div className="space-y-4">
-                    {Object.entries(activeJob.stages || {}).map(([num, stage]) => {
-                        const isCurrent = parseInt(num) === currentStageNum;
-                        const isLocked = parseInt(num) > currentStageNum;
-                        const isCompleted = stage.status === 'approved'; 
+                    {stageNumbers.map((num) => {
+                        const stageDef = stageDefinitionMap[num] || stageDefinitionMap[String(num)] || {};
+                        const jobStage = activeJob?.stages?.[num] || activeJob?.stages?.[String(num)] || {};
+                        const stage = {
+                            ...stageDef,
+                            ...jobStage,
+                            name: stageDef.name || jobStage.name || `Stage ${num}`,
+                            req: stageDef.req || jobStage.req || ""
+                        };
+
+                        const isCurrent = num === currentStageNum;
+                        const isLocked = num > currentStageNum;
+                        const isCompleted = stage.status === 'completed' || stage.status === 'approved';
                         const isPending = stage.status === 'pending_review';
                         const isRejected = stage.status === 'returned';
 
