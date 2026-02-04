@@ -29,10 +29,16 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
+import { THEME_OPTIONS } from "../../lib/themeConfig";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function StudentDashboard() {
   const { user, userData } = useAuth();
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const labels = theme.labels;
+  const [classThemeId, setClassThemeId] = useState("agency");
+  const [isSavingTheme, setIsSavingTheme] = useState(false);
   
   const [contracts, setContracts] = useState([]);
   const [activeJobs, setActiveJobs] = useState({}); 
@@ -77,6 +83,15 @@ export default function StudentDashboard() {
     });
     return () => unsubscribe();
   }, [user]);
+
+  useEffect(() => {
+    if (!userData?.class_id) return;
+    const unsub = onSnapshot(doc(db, "classes", userData.class_id), (snap) => {
+      if (!snap.exists()) return;
+      setClassThemeId(snap.data()?.theme_id || "agency");
+    });
+    return () => unsub();
+  }, [userData?.class_id]);
 
   // 2. CHECK FOR DAILY MISSIONS (The Intercept)
   useEffect(() => {
@@ -206,18 +221,18 @@ export default function StudentDashboard() {
   const progress = ((stats.xp % 1000) / 1000) * 100;
   
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <div className="min-h-screen theme-bg pb-20">
       <Navbar />
     
       <div className="max-w-6xl mx-auto p-8">
         
         {/* WELCOME SECTION */}
         <div className="mb-8">
-            <h1 className="text-3xl font-extrabold text-slate-900">
+            <h1 className="text-3xl font-extrabold theme-text">
                 Welcome back, {user?.displayName?.split(' ')[0]}.
             </h1>
-            <p className="text-slate-500">
-                Class Clearance: <span className="font-bold text-indigo-600 uppercase">{userData?.class_id || "Unassigned"}</span>
+            <p className="theme-muted">
+                Class Clearance: <span className="font-bold theme-accent uppercase">{userData?.class_id || "Unassigned"}</span>
             </p>
         </div>
 
@@ -225,15 +240,15 @@ export default function StudentDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
             
             {/* CARD 1: BANK ACCOUNT */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between relative overflow-hidden group">
+            <div className="theme-surface p-6 rounded-2xl shadow-sm border theme-border flex items-center justify-between relative overflow-hidden group">
                 <div className="relative z-10">
-                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Agency Earnings</p>
-                    <h2 className="text-4xl font-black text-slate-900">${stats.currency}</h2>
+                    <p className="theme-muted text-xs font-bold uppercase tracking-wider mb-1">{labels.currency} Earned</p>
+                    <h2 className="text-4xl font-black theme-text">${stats.currency}</h2>
                     <button 
                         onClick={() => navigate('/shop')} 
-                        className="text-indigo-600 text-sm font-bold mt-2 hover:underline flex items-center gap-1"
+                        className="theme-accent text-sm font-bold mt-2 hover:underline flex items-center gap-1"
                     >
-                        Visit Store <ArrowRight size={14}/>
+                        Visit {labels.shop} <ArrowRight size={14}/>
                     </button>
                 </div>
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600 z-10">
@@ -243,13 +258,13 @@ export default function StudentDashboard() {
             </div>
 
             {/* CARD 2: XP & LEVEL */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between relative overflow-hidden group">
+            <div className="theme-surface p-6 rounded-2xl shadow-sm border theme-border flex items-center justify-between relative overflow-hidden group">
                 <div className="relative z-10 w-full mr-4">
                     <div className="flex justify-between items-end mb-1">
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Career Progress</p>
-                        <span className="text-indigo-600 font-bold text-xs">{stats.xp} / {nextLevelXp} XP</span>
+                        <p className="theme-muted text-xs font-bold uppercase tracking-wider">{labels.xp} Progress</p>
+                        <span className="theme-accent font-bold text-xs">{stats.xp} / {nextLevelXp} {labels.xp}</span>
                     </div>
-                    <h2 className="text-4xl font-black text-slate-900 mb-3">Level {currentLevel}</h2>
+                    <h2 className="text-4xl font-black theme-text mb-3">Level {currentLevel}</h2>
                     <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                         <div 
                             className="h-full bg-indigo-600 rounded-full transition-all duration-1000 ease-out"
@@ -265,19 +280,19 @@ export default function StudentDashboard() {
             
         </div>
 
-        <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <Briefcase className="text-slate-400" size={20}/> Available Contracts
+        <h2 className="text-xl font-bold theme-text mb-4 flex items-center gap-2">
+            <Briefcase className="text-slate-400" size={20}/> Available {labels.assignments}
         </h2>
         
         {/* WE NOW USE visibleContracts INSTEAD OF contracts */}
         {visibleContracts.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+            <div className="p-12 text-center theme-muted border-2 border-dashed theme-border rounded-xl theme-card">
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
                     <Lock className="text-slate-400" size={32} />
                 </div>
-                <h3 className="text-lg font-bold text-slate-700">Restricted Access</h3>
+                <h3 className="text-lg font-bold theme-text">Restricted Access</h3>
                 <p className="max-w-md mx-auto mt-2">
-                    No active contracts found for the <span className="font-mono text-slate-600 font-bold">{userData?.class_id}</span> division.
+                    No active {labels.assignments.toLowerCase()} found for the <span className="font-mono text-slate-600 font-bold">{userData?.class_id}</span> division.
                 </p>
             </div>
         ) : (
@@ -310,7 +325,7 @@ export default function StudentDashboard() {
                     }
 
                     return (
-                        <div key={contract.id} className={`rounded-xl overflow-hidden shadow-sm border transition flex flex-col h-full ${borderClass}`}>
+                        <div key={contract.id} className={`rounded-xl overflow-hidden shadow-sm border transition flex flex-col h-full ${borderClass} theme-border`}>
                             <div className="p-6 flex-1">
                                 <div className="flex justify-between items-start mb-4">
                                     <span className="bg-slate-100 text-slate-600 text-[10px] px-2 py-1 rounded uppercase font-bold tracking-wider">
@@ -333,19 +348,19 @@ export default function StudentDashboard() {
                                     )}
                                 </div>
 
-                                <h3 className="text-lg font-bold text-slate-800 mb-2">
+                                <h3 className="text-lg font-bold theme-text mb-2">
                                     {contract.title}
                                 </h3>
-                                <p className="text-slate-500 text-sm line-clamp-3 mb-4">
+                                <p className="theme-muted text-sm line-clamp-3 mb-4">
                                     {contract.description}
                                 </p>
                                 
                                 <div className="flex items-center gap-4 text-sm font-medium mt-auto">
                                     <span className="flex items-center text-green-600"><DollarSign size={14}/> {contract.bounty}</span>
-                                    <span className="flex items-center text-indigo-600"><Zap size={14}/> {contract.xp_reward} XP</span>
+                                    <span className="flex items-center text-indigo-600"><Zap size={14}/> {contract.xp_reward} {labels.xp}</span>
                                 </div>
                             </div>
-                            <div className="px-6 py-3 border-t border-black/5 mt-auto bg-black/5">
+                            <div className="px-6 py-3 border-t border-black/5 mt-auto">
                                 <button 
                                     onClick={() => navigate(`/contract/${contract.id}`)}
                                     className={`w-full font-medium py-2 rounded-lg transition ${buttonClass}`}
@@ -359,6 +374,51 @@ export default function StudentDashboard() {
             </div>
         )}
       </div>
+      {["teacher", "admin", "super_admin", "department_admin", "teacher_admin", "chair"].includes(userData?.role) && userData?.class_id && (
+        <div className="max-w-6xl mx-auto px-8 pb-8">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Class Theme</h3>
+                <p className="text-slate-600 text-sm">Set the experience theme for your current class.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <select
+                  className="border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-700 bg-white"
+                  value={classThemeId}
+                  onChange={(e) => setClassThemeId(e.target.value)}
+                >
+                  {THEME_OPTIONS.map((themeOption) => (
+                    <option key={themeOption.id} value={themeOption.id}>
+                      {themeOption.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={async () => {
+                    setIsSavingTheme(true);
+                    try {
+                      await updateDoc(doc(db, "classes", userData.class_id), {
+                        theme_id: classThemeId,
+                        updatedAt: new Date().toISOString()
+                      });
+                    } catch (err) {
+                      console.error("Theme update failed", err);
+                      alert("Failed to update theme.");
+                    } finally {
+                      setIsSavingTheme(false);
+                    }
+                  }}
+                  className="bg-slate-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-600 transition"
+                  disabled={isSavingTheme}
+                >
+                  {isSavingTheme ? "Saving..." : "Update Theme"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* --- TOP SECRET MISSION POPUP --- */}
       {showMissionModal && dailyMission && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">

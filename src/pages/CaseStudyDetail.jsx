@@ -1,5 +1,5 @@
 import { useParams, Link, Navigate } from "react-router-dom";
-import { ArrowLeft, CheckCircle, Layers, Cpu, Zap, ArrowRight, Hexagon } from "lucide-react";
+import { ArrowLeft, CheckCircle, Layers, Cpu, Zap, ArrowRight } from "lucide-react";
 
 // --- THE LORE DATABASE ---
 const CASE_STUDIES = {
@@ -15,7 +15,7 @@ const CASE_STUDIES = {
     },
     brief: "Nebula Nine came to us with a critical problem: Players in their massive space RPG were getting overwhelmed by data. They needed a 'diegetic' interface—one that felt like it existed inside the game world, not just a sticker on top of the screen.",
     solution: "We engineered a holographic design system. Instead of static text, we used spatial depth to organize information. Critical combat data floats closest to the player's view, while inventory management sits in the peripheral vision. We conducted eye-tracking studies on 50 beta testers to ensure the health bar was visible without breaking immersion.",
-    quote: "The Dream Agency didn't just design a menu; they designed the nervous system of our game.",
+    quote: "XP Labs didn't just design a menu; they designed the nervous system of our game.",
     images: ["bg-purple-900", "bg-indigo-800", "bg-slate-900"] // Placeholder classes for "images"
   },
   "chronos-institute": {
@@ -60,7 +60,7 @@ const CASE_STUDIES = {
     },
     brief: "Strategos had a brilliant game mechanic about Cold War espionage, but the prototype was just index cards and scribbles. They needed a visual identity that screamed 'Top Secret' and felt expensive to the touch.",
     solution: "We treated the box like a classified dossier. We used matte black paper with spot-gloss UV coating for secret messages that only appear under light. The cards were designed with clear iconography to speed up gameplay. We didn't just design the look; we helped refine the rulebook to make it easier for new players to learn.",
-    quote: "The unboxing experience alone sold the game. Dream Agency understands tactility.",
+    quote: "The unboxing experience alone sold the game. XP Labs understands tactility.",
     images: ["bg-emerald-900", "bg-teal-800", "bg-stone-800"]
   }
 };
@@ -76,11 +76,9 @@ export default function CaseStudyDetail() {
       
       {/* NAV */}
       <nav className="flex items-center justify-between px-6 py-6 max-w-7xl mx-auto">
-        <Link to="/" className="flex items-center gap-2 font-black text-2xl tracking-tighter text-slate-900">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
-            <Hexagon size={20} fill="currentColor" />
-          </div>
-          DREAM<span className="text-indigo-600">AGENCY</span>
+        <Link to="/" className="flex items-center gap-3 font-black text-2xl tracking-tighter text-slate-900">
+          <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-8 w-auto" />
+          XP Labs
         </Link>
         <Link to="/clients" className="flex items-center gap-2 font-bold text-sm text-slate-500 hover:text-indigo-600 transition">
             <ArrowLeft size={16} /> BACK TO DOSSIERS
@@ -154,7 +152,7 @@ export default function CaseStudyDetail() {
 
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8">
                 <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                    <Zap size={20} className="text-yellow-500" /> Agency Note
+                    <Zap size={20} className="text-yellow-500" /> Lab Note
                 </h3>
                 <p className="text-slate-600">
                     This project required <strong>{study.tags[1]}</strong>. If you are interested in this career path, check the "Available Contracts" in your dashboard for related tasks.

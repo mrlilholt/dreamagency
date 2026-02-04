@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { CLASS_CODES, INITIAL_STATS } from "../lib/gameConfig";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, collection, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useNavigate } from "react-router-dom";
 import { Terminal, ArrowRight, AlertCircle } from "lucide-react";
@@ -10,8 +10,22 @@ export default function Onboarding() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [availableClasses, setAvailableClasses] = useState([]);
   const { user } = useAuth(); // The Google User
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const loadClasses = async () => {
+      try {
+        const snap = await getDocs(collection(db, "classes"));
+        const classList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setAvailableClasses(classList);
+      } catch (error) {
+        console.error("Failed to load classes:", error);
+      }
+    };
+    loadClasses();
+  }, []);
 
   const handleJoin = async (e) => {
     e.preventDefault();
@@ -19,7 +33,8 @@ export default function Onboarding() {
     setLoading(true);
 
     const upperCode = code.toUpperCase().trim();
-    const selectedClass = CLASS_CODES[upperCode];
+    const classFromDirectory = availableClasses.find((cls) => cls.code === upperCode);
+    const selectedClass = classFromDirectory || CLASS_CODES[upperCode];
 
     // 1. Validate Code
     if (!selectedClass) {
@@ -32,12 +47,16 @@ export default function Onboarding() {
     try {
       const userRef = doc(db, "users", user.uid);
       
+      const isAdmin = selectedClass.role === "admin";
+
       await setDoc(userRef, {
         uid: user.uid,
         name: user.displayName,
         email: user.email,
         photoURL: user.photoURL,
         class_id: selectedClass.id,
+        division: selectedClass.division || null,
+        divisions: isAdmin ? ["LS", "MS", "US"] : [],
         role: selectedClass.role || "associate", // Default to associate unless it's the Admin code
         ...INITIAL_STATS,
         joinedAt: serverTimestamp()

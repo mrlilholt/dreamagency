@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from "./context/ThemeContext";
 import NotificationLayer from "./components/NotificationLayer";
 
 // Pages
@@ -45,9 +46,10 @@ const PrivateRoute = ({ children, requireAdmin = false }) => {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <NotificationLayer />
-        <Routes>
+      <ThemeProvider>
+        <BrowserRouter>
+          <NotificationLayer />
+          <Routes>
           
           {/* PUBLIC ROUTES */}
           <Route path="/" element={<LandingPage />} />
@@ -93,8 +95,9 @@ function App() {
           {/* FALLBACK */}
           <Route path="*" element={<Navigate to="/" replace />} />
 
-        </Routes>
-      </BrowserRouter>
+          </Routes>
+        </BrowserRouter>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

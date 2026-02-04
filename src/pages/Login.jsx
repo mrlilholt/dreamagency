@@ -1,6 +1,5 @@
 import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
-import { Briefcase } from "lucide-react"; // Nice icon
 
 export default function Login() {
   const { user, login } = useAuth();
@@ -17,10 +16,10 @@ export default function Login() {
         
         {/* Header */}
         <div className="bg-slate-900 p-8 text-center">
-          <div className="mx-auto bg-indigo-500 w-16 h-16 rounded-full flex items-center justify-center mb-4 shadow-lg">
-            <Briefcase className="text-white w-8 h-8" />
+          <div className="mx-auto bg-white w-20 h-20 rounded-full flex items-center justify-center mb-4 shadow-lg">
+            <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-10 w-auto" />
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">DREAM Agency</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">XP Labs</h1>
           <p className="text-slate-400 mt-2 text-sm">Design • Research • Engineering • Art • Maker</p>
         </div>
 

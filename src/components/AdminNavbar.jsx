@@ -1,6 +1,6 @@
 import { useAuth } from "../context/AuthContext";
 import { Link, useLocation } from "react-router-dom";
-import { Layout, Users, FilePlus, LogOut, Shield, FolderOpen, TrendingUp } from "lucide-react"; // Import TrendingUp
+import { Layout, Users, FilePlus, LogOut, FolderOpen, TrendingUp } from "lucide-react"; // Import TrendingUp
 export default function AdminNavbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -22,10 +22,8 @@ export default function AdminNavbar() {
           {/* LEFT: BRANDING */}
           <div className="flex items-center gap-6">
             <Link to="/admin/dashboard" className="flex items-center gap-2 group">
-                <div className="bg-slate-900 text-white p-1 rounded-lg group-hover:bg-indigo-600 transition">
-                    <Shield size={16} />
-                </div>
-                <span className="font-extrabold text-slate-800 tracking-tight text-base">AGENCY <span className="text-slate-400">ADMIN</span></span>
+                <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-7 w-auto" />
+                <span className="font-extrabold text-slate-800 tracking-tight text-base">ADMIN</span>
             </Link>
 
             {/* CENTER: NAVIGATION LINKS */}

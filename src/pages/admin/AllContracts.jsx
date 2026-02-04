@@ -7,7 +7,7 @@ import {
     Star, Crown, Zap, Target, Award, Rocket, Bookmark,
     Hexagon, Heart, Flag, Lock
 } from "lucide-react";
-import AdminNavbar from "../../components/AdminNavbar";
+import AdminShell from "../../components/AdminShell";
 
 // --- 1. ICON MAP FOR BADGES ---
 const AVAILABLE_ICONS = [
@@ -110,9 +110,8 @@ export default function AllContracts() {
   if (loading) return <div className="p-10 text-center text-slate-400">Loading library...</div>;
 
   return (
-    <div className="min-h-screen bg-slate-50">
-        <AdminNavbar />
-        <div className="max-w-6xl mx-auto p-6">
+    <AdminShell>
+        <div className="max-w-6xl mx-auto">
             
             <div className="flex items-center justify-between mb-8">
                 <div>
@@ -306,6 +305,6 @@ export default function AllContracts() {
             )}
 
         </div>
-    </div>
+    </AdminShell>
   );
 }

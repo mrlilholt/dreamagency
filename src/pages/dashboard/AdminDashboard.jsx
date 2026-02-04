@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   deleteField, 
   writeBatch,
+  setDoc,
   query,    // <--- ADD THIS
   orderBy   
 } from "firebase/firestore";
@@ -40,8 +41,9 @@ import {
     Archive,
     ArrowRight,
 } from "lucide-react";
-import AdminNavbar from "../../components/AdminNavbar";
+import AdminShell from "../../components/AdminShell";
 import { CLASS_CODES } from "../../lib/gameConfig";
+import { THEME_OPTIONS } from "../../lib/themeConfig";
 // --- ICON LIST (For Shop) ---
 const AVAILABLE_ICONS = [
     "life-buoy", "map-pin", "briefcase", "pen-tool", "clock", 
@@ -98,6 +100,15 @@ const [missions, setMissions] = useState([]);
 // --- MISSION TABS STATE ---
   const [missionTab, setMissionTab] = useState("active"); // 'active' | 'archive'
   const [editingMissionId, setEditingMissionId] = useState(null);
+  const [classForm, setClassForm] = useState({
+      id: "",
+      code: "",
+      name: "",
+      division: "MS",
+      department: "",
+      theme_id: "agency"
+  });
+  const [isSavingClass, setIsSavingClass] = useState(false);
 
   // SEPARATE MISSIONS BY DATE
   const todayDate = new Date().toISOString().split('T')[0];
@@ -213,6 +224,39 @@ const [missions, setMissions] = useState([]);
   const handleDeleteMission = async (id) => {
       if(confirm("Delete this mission?")) {
           await deleteDoc(doc(db, "daily_missions", id));
+      }
+  };
+
+  const handleCreateClass = async (e) => {
+      e.preventDefault();
+      if (!classForm.id || !classForm.code || !classForm.name) {
+          alert("Please provide class code, ID, and name.");
+          return;
+      }
+      setIsSavingClass(true);
+      try {
+          await setDoc(doc(db, "classes", classForm.id.trim()), {
+              id: classForm.id.trim(),
+              code: classForm.code.trim().toUpperCase(),
+              name: classForm.name.trim(),
+              division: classForm.division,
+              department: classForm.department.trim() || null,
+              theme_id: classForm.theme_id || "agency",
+              createdAt: serverTimestamp()
+          });
+          setClassForm({
+              id: "",
+              code: "",
+              name: "",
+              division: "MS",
+              department: "",
+              theme_id: "agency"
+          });
+      } catch (error) {
+          console.error("Create class failed:", error);
+          alert("Failed to create class.");
+      } finally {
+          setIsSavingClass(false);
       }
   };
   // --- LISTENERS ---
@@ -514,10 +558,8 @@ const [missions, setMissions] = useState([]);
   });
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <AdminNavbar />
-      
-      <div className="max-w-6xl mx-auto p-6">
+    <AdminShell>
+      <div className="max-w-6xl mx-auto">
         
         {/* HEADER & TABS */}
         <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
@@ -616,7 +658,7 @@ const [missions, setMissions] = useState([]);
 
         {/* ==================== TAB 1: APPROVALS ==================== */}
         {activeTab === "approvals" && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
                 {/* STATS CARDS */}
                 <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -772,6 +814,92 @@ const [missions, setMissions] = useState([]);
                  
                  {/* LEFT: CONTROLS */}
                  <div className="lg:col-span-1 space-y-6">
+                    {/* CLASS CREATION */}
+                    <div className="p-6 rounded-xl border shadow-sm bg-white border-slate-200">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Users className="text-indigo-600" size={18} />
+                            <h3 className="font-bold text-slate-800">Create Class</h3>
+                        </div>
+                        <form onSubmit={handleCreateClass} className="space-y-3">
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-500">Class Name</label>
+                                <input
+                                    type="text"
+                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                                    placeholder="e.g. 7th Grade CS"
+                                    value={classForm.name}
+                                    onChange={(e) => setClassForm({ ...classForm, name: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Class ID</label>
+                                    <input
+                                        type="text"
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono"
+                                        placeholder="e.g. 7th_cs"
+                                        value={classForm.id}
+                                        onChange={(e) => setClassForm({ ...classForm, id: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Join Code</label>
+                                    <input
+                                        type="text"
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono"
+                                        placeholder="e.g. CS7"
+                                        value={classForm.code}
+                                        onChange={(e) => setClassForm({ ...classForm, code: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Division</label>
+                                    <select
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                                        value={classForm.division}
+                                        onChange={(e) => setClassForm({ ...classForm, division: e.target.value })}
+                                    >
+                                        <option value="LS">LS</option>
+                                        <option value="MS">MS</option>
+                                        <option value="US">US</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Theme</label>
+                                    <select
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                                        value={classForm.theme_id}
+                                        onChange={(e) => setClassForm({ ...classForm, theme_id: e.target.value })}
+                                    >
+                                        {THEME_OPTIONS.map((themeOption) => (
+                                            <option key={themeOption.id} value={themeOption.id}>
+                                                {themeOption.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-500">Department (optional)</label>
+                                <input
+                                    type="text"
+                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                                    placeholder="e.g. Computer Science"
+                                    value={classForm.department}
+                                    onChange={(e) => setClassForm({ ...classForm, department: e.target.value })}
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                className="w-full bg-indigo-600 text-white font-bold py-2 rounded-lg hover:bg-indigo-700 transition"
+                                disabled={isSavingClass}
+                            >
+                                {isSavingClass ? "Creating..." : "Create Class"}
+                            </button>
+                        </form>
+                    </div>
                     
                     {/* NEW: MARKET SALE CONTROL */}
                     <div className={`p-6 rounded-xl border shadow-sm transition-all ${isSaleActive ? "bg-red-50 border-red-200 ring-2 ring-red-500" : "bg-white border-slate-200"}`}>
@@ -1346,5 +1474,6 @@ const [missions, setMissions] = useState([]);
         </div>
       )}
       </div>
+    </AdminShell>
   );
 }

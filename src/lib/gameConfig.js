@@ -2,22 +2,30 @@ export const CLASS_CODES = {
   "DREAM7": {
     id: "7th_dream_lab",
     name: "7th Grade DREAM Lab",
-    theme: "Maker"
+    theme: "Maker",
+    division: "MS",
+    department: "DREAM Lab"
   },
   "CS7": {
     id: "7th_cs",
     name: "7th Grade Comp Sci",
-    theme: "Cyber"
+    theme: "Cyber",
+    division: "MS",
+    department: "Computer Science"
   },
   "DREAM8": {
     id: "8th_dream_elective",
     name: "8th Grade DREAM Elective",
-    theme: "Agency"
+    theme: "Agency",
+    division: "MS",
+    department: "DREAM Elective"
   },
   "ID": {
     id: "Interdisciplinary_design",
     name: "8th Grade Interdisciplinary Design",
-    theme: "Agency"
+    theme: "Agency",
+    division: "MS",
+    department: "Interdisciplinary Design"
   },
   // You can add a "Teacher Code" so you get Admin powers automatically
   "CEO2024": {

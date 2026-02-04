@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Search, Lightbulb, PenTool, RefreshCw, ShieldCheck, Hexagon } from "lucide-react";
+import { Search, Lightbulb, PenTool, RefreshCw, ShieldCheck } from "lucide-react";
 
 export default function ProcessPage() {
   const steps = [
@@ -38,11 +38,9 @@ export default function ProcessPage() {
       
       {/* NAV (Simplified) */}
       <nav className="flex items-center justify-between px-6 py-6 max-w-7xl mx-auto">
-        <Link to="/" className="flex items-center gap-2 font-black text-2xl tracking-tighter text-slate-900">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
-            <Hexagon size={20} fill="currentColor" />
-          </div>
-          DREAM<span className="text-indigo-600">AGENCY</span>
+        <Link to="/" className="flex items-center gap-3 font-black text-2xl tracking-tighter text-slate-900">
+          <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-8 w-auto" />
+          XP Labs
         </Link>
         <Link to="/login" className="font-bold text-sm bg-slate-900 text-white px-4 py-2 rounded-full hover:bg-indigo-600 transition">
             EMPLOYEE LOGIN

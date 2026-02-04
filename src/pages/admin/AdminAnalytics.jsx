@@ -6,11 +6,12 @@ import {
     TrendingUp, Users, DollarSign, Trophy, 
     PieChart, Activity, Clock, BarChart3
 } from "lucide-react";
-import AdminNavbar from "../../components/AdminNavbar";
+import AdminShell from "../../components/AdminShell";
 
 export default function AdminAnalytics() {
   const [users, setUsers] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   
   // DRILL DOWN STATE
@@ -41,7 +42,11 @@ export default function AdminAnalytics() {
         setLoading(false);
     });
 
-    return () => { unsubUsers(); unsubJobs(); };
+    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
+        setClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => { unsubUsers(); unsubJobs(); unsubClasses(); };
   }, []);
 
   if (loading) return <div className="p-10 text-center">Crunching numbers...</div>;
@@ -52,12 +57,20 @@ export default function AdminAnalytics() {
   const avgLevel = users.length ? Math.floor((totalXP / users.length) / 1000) + 1 : 1;
 
   // Class Stats Grouping
+  const classDirectorySource = classes.length > 0
+      ? classes
+      : Object.values(CLASS_CODES).map((cls) => ({
+          id: cls.id,
+          name: cls.name,
+          division: cls.division
+      }));
+
   const classStats = {};
   users.forEach(u => {
       const cId = u.class_id;
       if (!cId) return;
       if (!classStats[cId]) {
-          const classObj = Object.values(CLASS_CODES).find(c => c.id === cId);
+          const classObj = classDirectorySource.find(c => c.id === cId);
           classStats[cId] = { 
               id: cId,
               xp: 0, 
@@ -75,6 +88,12 @@ export default function AdminAnalytics() {
       ...c,
       avgXp: c.count ? Math.floor(c.xp / c.count) : 0
   }));
+  const classComparisonByDivision = classComparison.reduce((acc, cls) => {
+      const division = classDirectorySource.find(c => c.id === cls.id)?.division || "Unassigned";
+      if (!acc[division]) acc[division] = [];
+      acc[division].push(cls);
+      return acc;
+  }, {});
   const maxAvgXp = Math.max(...classComparison.map(c => c.avgXp), 1);
 
   // Job Stats
@@ -150,10 +169,8 @@ export default function AdminAnalytics() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
-      <AdminNavbar />
-
-      <div className="max-w-7xl mx-auto p-8">
+    <AdminShell>
+      <div className="max-w-7xl mx-auto pb-20">
         
         {/* HEADER */}
         <div className="mb-8">
@@ -195,30 +212,35 @@ export default function AdminAnalytics() {
                     </span>
                 </div>
                 <div className="space-y-6">
-                    {classComparison.map((cls) => {
-                        const isSelected = selectedClassId === cls.id;
-                        return (
-                            <div 
-                                key={cls.id} 
-                                onClick={() => {
-                                    setSelectedClassId(isSelected ? null : cls.id);
-                                    setSelectedContract("ALL_XP");
-                                }}
-                                className={`cursor-pointer transition group ${isSelected ? 'opacity-100' : 'hover:opacity-80'}`}
-                            >
-                                <div className="flex justify-between text-sm font-bold mb-1">
-                                    <span className={`${isSelected ? 'text-indigo-700' : 'text-slate-700'}`}>{cls.name}</span>
-                                    <span className="text-indigo-600">{cls.avgXp} XP Avg</span>
-                                </div>
-                                <div className={`w-full h-4 rounded-full overflow-hidden ${isSelected ? 'ring-2 ring-indigo-300 ring-offset-1' : 'bg-slate-100'}`}>
+                    {Object.entries(classComparisonByDivision).map(([division, classes]) => (
+                        <div key={division} className="space-y-3">
+                            <div className="text-xs font-bold uppercase tracking-widest text-slate-400">{division} Division</div>
+                            {classes.map((cls) => {
+                                const isSelected = selectedClassId === cls.id;
+                                return (
                                     <div 
-                                        className={`h-full transition-all duration-500 ${isSelected ? 'bg-indigo-600' : 'bg-indigo-400'}`} 
-                                        style={{ width: `${(cls.avgXp / maxAvgXp) * 100}%` }}
-                                    ></div>
-                                </div>
-                            </div>
-                        );
-                    })}
+                                        key={cls.id} 
+                                        onClick={() => {
+                                            setSelectedClassId(isSelected ? null : cls.id);
+                                            setSelectedContract("ALL_XP");
+                                        }}
+                                        className={`cursor-pointer transition group ${isSelected ? 'opacity-100' : 'hover:opacity-80'}`}
+                                    >
+                                        <div className="flex justify-between text-sm font-bold mb-1">
+                                            <span className={`${isSelected ? 'text-indigo-700' : 'text-slate-700'}`}>{cls.name}</span>
+                                            <span className="text-indigo-600">{cls.avgXp} XP Avg</span>
+                                        </div>
+                                        <div className={`w-full h-4 rounded-full overflow-hidden ${isSelected ? 'ring-2 ring-indigo-300 ring-offset-1' : 'bg-slate-100'}`}>
+                                            <div 
+                                                className={`h-full transition-all duration-500 ${isSelected ? 'bg-indigo-600' : 'bg-indigo-400'}`} 
+                                                style={{ width: `${(cls.avgXp / maxAvgXp) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ))}
                 </div>
             </div>
 
@@ -328,6 +350,6 @@ export default function AdminAnalytics() {
             </div>
         )}
       </div>
-    </div>
+    </AdminShell>
   );
 }

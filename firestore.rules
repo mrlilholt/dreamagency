@@ -1,0 +1,210 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(orgId) {
+      return get(/databases/$(database)/documents/orgs/$(orgId)/users/$(request.auth.uid));
+    }
+
+    function isOrgMember(orgId) {
+      return signedIn() && exists(/databases/$(database)/documents/orgs/$(orgId)/users/$(request.auth.uid));
+    }
+
+    function role(orgId) {
+      return userDoc(orgId).data.role;
+    }
+
+    function status(orgId) {
+      return userDoc(orgId).data.status;
+    }
+
+    function isActive(orgId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/orgs/$(orgId)/users/$(request.auth.uid)) &&
+        (!("status" in userDoc(orgId).data) || status(orgId) == null || status(orgId) == "active");
+    }
+
+    function isAdmin(orgId) {
+      return isActive(orgId) && ["admin", "teacher_admin", "department_admin", "super_admin"].hasAny([role(orgId)]);
+    }
+
+    function isSuper(orgId) {
+      return isActive(orgId) && role(orgId) == "super_admin";
+    }
+
+    function joinCode(code) {
+      return get(/databases/$(database)/documents/join_codes/$(code));
+    }
+
+    function validJoinCode(orgId, code) {
+      return exists(/databases/$(database)/documents/join_codes/$(code)) &&
+        joinCode(code).data.orgId == orgId &&
+        joinCode(code).data.active == true;
+    }
+
+    match /user_index/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /join_codes/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn() && isAdmin(request.resource.data.orgId);
+      allow delete: if signedIn() && isAdmin(resource.data.orgId);
+      allow update: if signedIn() && (
+        isAdmin(resource.data.orgId) ||
+        (
+          request.resource.data.orgId == resource.data.orgId &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(["usedCount", "active"]) &&
+          request.resource.data.usedCount == resource.data.usedCount + 1
+        )
+      );
+    }
+
+    match /class_pages/{code} {
+      allow read: if true;
+      allow create: if signedIn() && isAdmin(request.resource.data.orgId);
+      allow update, delete: if signedIn() && isAdmin(resource.data.orgId);
+    }
+
+    match /class_slugs/{slug} {
+      allow read: if true;
+      allow create: if signedIn() && isAdmin(request.resource.data.orgId);
+      allow update, delete: if signedIn() && isAdmin(resource.data.orgId);
+    }
+
+    match /orgs/{orgId} {
+      allow read: if isOrgMember(orgId);
+      allow create: if signedIn() &&
+        request.resource.data.bootstrap == true &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if isSuper(orgId);
+
+      match /settings/{docId} {
+        allow read: if isOrgMember(orgId);
+        allow write: if isSuper(orgId);
+      }
+
+      match /departments/{deptId} {
+        allow read: if isOrgMember(orgId);
+        allow write: if isSuper(orgId);
+      }
+
+      match /classes/{classId} {
+        allow read: if isOrgMember(orgId);
+        allow create: if isSuper(orgId) || (
+          isAdmin(orgId) &&
+          ["department_admin", "teacher_admin", "admin"].hasAny([role(orgId)]) &&
+          ("departmentId" in request.resource.data) &&
+          request.resource.data.departmentId == userDoc(orgId).data.departmentId
+        );
+        allow update: if isSuper(orgId) || (
+          isAdmin(orgId) &&
+          ["department_admin", "teacher_admin", "admin"].hasAny([role(orgId)]) &&
+          resource.data.departmentId == userDoc(orgId).data.departmentId
+        );
+        allow delete: if isSuper(orgId);
+      }
+
+      match /users/{userId} {
+        allow read: if isOrgMember(orgId) && (request.auth.uid == userId || isAdmin(orgId));
+        allow create: if signedIn() && (
+          (
+            request.auth.uid == userId &&
+            validJoinCode(orgId, request.resource.data.join_code) &&
+            (
+              joinCode(request.resource.data.join_code).data.role == request.resource.data.role ||
+              (joinCode(request.resource.data.join_code).data.role == "student" && request.resource.data.role == "associate")
+            ) &&
+            (
+              !("classId" in joinCode(request.resource.data.join_code).data) ||
+              joinCode(request.resource.data.join_code).data.classId == request.resource.data.class_id
+            ) &&
+            (
+              joinCode(request.resource.data.join_code).data.role == "super_admin"
+                ? request.resource.data.status == "active"
+                : ["admin", "teacher_admin", "department_admin"].hasAny([joinCode(request.resource.data.join_code).data.role])
+                  ? request.resource.data.status == "pending"
+                  : (!("status" in request.resource.data) || request.resource.data.status == "active")
+            )
+          ) ||
+          (
+            request.auth.uid == userId &&
+            request.resource.data.bootstrap == true &&
+            request.resource.data.orgId == orgId &&
+            request.resource.data.role == "super_admin" &&
+            request.resource.data.status == "active" &&
+            get(/databases/$(database)/documents/orgs/$(orgId)).data.createdBy == request.auth.uid
+          )
+        );
+        allow update: if isOrgMember(orgId) && (
+          isAdmin(orgId) ||
+          (
+            request.auth.uid == userId &&
+            !request.resource.data.diff(resource.data).changedKeys().hasAny([
+              "role",
+              "status",
+              "orgId",
+              "org_id",
+              "departmentId",
+              "department_id",
+              "class_id",
+              "class_ids",
+              "uid"
+            ])
+          )
+        );
+        allow delete: if isOrgMember(orgId) && isAdmin(orgId);
+
+        match /alerts/{alertId} {
+          allow read, write: if isOrgMember(orgId) && (request.auth.uid == userId || isAdmin(orgId));
+        }
+      }
+
+      match /contracts/{docId} {
+        allow read: if isOrgMember(orgId);
+        allow write: if isAdmin(orgId);
+      }
+
+      match /badges/{docId} {
+        allow read: if isOrgMember(orgId);
+        allow write: if isAdmin(orgId);
+      }
+
+      match /shop_items/{docId} {
+        allow read: if isOrgMember(orgId);
+        allow create, delete: if isAdmin(orgId);
+        allow update: if isAdmin(orgId) || (
+          isOrgMember(orgId) &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(["stock"]) &&
+          resource.data.stock > 0 &&
+          request.resource.data.stock == resource.data.stock - 1
+        );
+      }
+
+      match /daily_missions/{docId} {
+        allow read: if isOrgMember(orgId);
+        allow write: if isAdmin(orgId);
+      }
+
+      match /suggestions/{docId} {
+        allow create: if isOrgMember(orgId);
+        allow read, update, delete: if isAdmin(orgId);
+      }
+
+      match /active_jobs/{jobId} {
+        allow read: if isOrgMember(orgId);
+        allow create: if isOrgMember(orgId) && request.resource.data.student_id == request.auth.uid;
+        allow update, delete: if isOrgMember(orgId) && (
+          isAdmin(orgId) || resource.data.student_id == request.auth.uid
+        );
+      }
+    }
+  }
+}

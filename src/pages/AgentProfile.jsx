@@ -155,18 +155,18 @@ const [panicMode, setPanicMode] = useState(false);
       setIsSending(false);
   };
 
-  if (loading || !agentData) return <div className="p-10 text-center">Loading Profile...</div>;
+  if (loading || !agentData) return <div className="p-10 text-center theme-muted">Loading Profile...</div>;
 
   // --- HELPER FUNCTIONS ---
   const getAgentName = () => agentData?.name || agentData?.displayName || user?.displayName || "Unknown Agent";
   const getAgentPhoto = () => agentData?.photoURL || user?.photoURL || null;
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <div className="min-h-screen theme-bg pb-20">
       <Navbar />
       
       {/* HEADER BANNER */}
-      <div className="bg-slate-900 text-white pb-20 pt-10 px-6">
+      <div className="theme-surface border-b theme-border pb-20 pt-10 px-6">
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-8">
             {/* ID CARD HEADER */}
             <div className="shrink-0">

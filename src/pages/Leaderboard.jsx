@@ -4,9 +4,12 @@ import { db } from "../lib/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 import Navbar from "../components/Navbar"; 
 import { Trophy, Medal, Crown, Zap, LayoutList, Rocket, Lock } from "lucide-react";
+import { useTheme } from "../context/ThemeContext";
 
 export default function Leaderboard() {
   const { userData } = useAuth(); // Get current user's class_id
+  const { theme } = useTheme();
+  const labels = theme.labels;
   const [users, setUsers] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [contracts, setContracts] = useState([]); // <--- NEW: Store contracts
@@ -107,16 +110,16 @@ export default function Leaderboard() {
   if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center">Loading Encryption Keys...</div>;
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <div className="min-h-screen theme-bg pb-20">
       <Navbar />
       <div className="max-w-4xl mx-auto p-6">
         <div className="text-center mb-10">
-            <h1 className="text-4xl font-extrabold text-slate-900 mb-2 flex justify-center items-center gap-3">
-                <Trophy className="text-yellow-500" /> Agency Leaderboards
+            <h1 className="text-4xl font-extrabold theme-text mb-2 flex justify-center items-center gap-3">
+                <Trophy className="text-yellow-500" /> {labels.assignment} Leaderboards
             </h1>
-            <p className="text-slate-500 flex items-center justify-center gap-2">
+            <p className="theme-muted flex items-center justify-center gap-2">
                 Division Rankings: 
-                <span className="font-bold text-indigo-600 uppercase bg-indigo-50 px-2 py-1 rounded text-xs">
+                <span className="font-bold theme-accent uppercase bg-indigo-50 px-2 py-1 rounded text-xs">
                     {userData?.role === 'admin' ? 'ALL AGENTS (ADMIN)' : userData?.class_id || "Unassigned"}
                 </span>
             </p>
@@ -130,7 +133,7 @@ export default function Leaderboard() {
                     activeTab === "OVERALL" ? "bg-slate-900 text-white shadow-lg" : "bg-white text-slate-500 border border-slate-200"
                 }`}
             >
-                <Zap size={16} className={activeTab === "OVERALL" ? "fill-white" : ""} /> Overall XP
+                <Zap size={16} className={activeTab === "OVERALL" ? "fill-white" : ""} /> Overall {labels.xp}
             </button>
             
             {/* Render tabs from the Filtered Contracts list */}
@@ -148,13 +151,13 @@ export default function Leaderboard() {
         </div>
 
         {/* LIST */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 min-h-[400px]">
+        <div className="theme-surface rounded-2xl shadow-xl overflow-hidden border theme-border min-h-[400px]">
             {rankings.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+                <div className="flex flex-col items-center justify-center h-64 theme-muted">
                     <Lock size={48} className="mb-4 opacity-20"/>
                     <p>No active agents found in the <span className="font-bold">{userData?.class_id}</span> division.</p>
                     {activeTab !== "OVERALL" && (
-                        <p className="text-xs mt-2">Be the first to start this mission!</p>
+                        <p className="text-xs mt-2">Be the first to start this {labels.assignment.toLowerCase()}!</p>
                     )}
                 </div>
             ) : (
@@ -184,7 +187,7 @@ export default function Leaderboard() {
                         {/* Score Display */}
                         <div className="text-right">
                             {activeTab === "OVERALL" ? (
-                                <span className="block text-xl font-black text-slate-900">{agent.xp?.toLocaleString()} XP</span>
+                                <span className="block text-xl font-black text-slate-900">{agent.xp?.toLocaleString()} {labels.xp}</span>
                             ) : (
                                 <span className="block text-xl font-black text-indigo-600">Stage {agent.rankingMetric}</span>
                             )}

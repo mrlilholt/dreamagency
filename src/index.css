@@ -1,1 +1,202 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600;700&family=Special+Elite&family=Sora:wght@400;600;700;800&family=Space+Grotesk:wght@400;600;700&family=Unbounded:wght@400;600;700&display=swap");
+
+:root {
+  --theme-bg: #f8fafc;
+  --theme-surface: #ffffff;
+  --theme-card: #f8fafc;
+  --theme-text: #0f172a;
+  --theme-muted: #64748b;
+  --theme-accent: #4f46e5;
+  --theme-border: #e2e8f0;
+  --theme-font: "Sora", system-ui, sans-serif;
+}
+
+[data-theme="agency"] {
+  --theme-bg: #f8fafc;
+  --theme-surface: #ffffff;
+  --theme-card: #f8fafc;
+  --theme-text: #0f172a;
+  --theme-muted: #64748b;
+  --theme-accent: #4f46e5;
+  --theme-border: #e2e8f0;
+  --theme-font: "Sora", system-ui, sans-serif;
+}
+
+[data-theme="museum"] {
+  --theme-bg: #fffbeb;
+  --theme-surface: #fff7ed;
+  --theme-card: #fffaf0;
+  --theme-text: #3f1d0b;
+  --theme-muted: #92400e;
+  --theme-accent: #7f1d1d;
+  --theme-border: #fed7aa;
+  --theme-font: "Crimson Pro", serif;
+}
+
+[data-theme="orbital"] {
+  --theme-bg: #0f172a;
+  --theme-surface: #111827;
+  --theme-card: #0b1220;
+  --theme-text: #e2e8f0;
+  --theme-muted: #94a3b8;
+  --theme-accent: #22d3ee;
+  --theme-border: #1e293b;
+  --theme-font: "Space Grotesk", system-ui, sans-serif;
+}
+
+[data-theme="guild"] {
+  --theme-bg: #052e16;
+  --theme-surface: #064e3b;
+  --theme-card: #05351f;
+  --theme-text: #ecfdf5;
+  --theme-muted: #a7f3d0;
+  --theme-accent: #facc15;
+  --theme-border: #065f46;
+  --theme-font: "Unbounded", system-ui, sans-serif;
+}
+
+[data-theme="newsroom"] {
+  --theme-bg: #ffffff;
+  --theme-surface: #f8fafc;
+  --theme-card: #ffffff;
+  --theme-text: #020617;
+  --theme-muted: #64748b;
+  --theme-accent: #dc2626;
+  --theme-border: #e2e8f0;
+  --theme-font: "Sora", system-ui, sans-serif;
+}
+
+[data-theme="cyber"] {
+  --theme-bg: #000000;
+  --theme-surface: #0b0f0d;
+  --theme-card: #0b0f0d;
+  --theme-text: #d1fae5;
+  --theme-muted: #6ee7b7;
+  --theme-accent: #22c55e;
+  --theme-border: #064e3b;
+  --theme-font: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+[data-theme="hospital"] {
+  --theme-bg: #f8fafc;
+  --theme-surface: #ffffff;
+  --theme-card: #f1f5f9;
+  --theme-text: #0f172a;
+  --theme-muted: #64748b;
+  --theme-accent: #0d9488;
+  --theme-border: #e2e8f0;
+  --theme-font: "Sora", system-ui, sans-serif;
+}
+
+[data-theme="court"] {
+  --theme-bg: #291611;
+  --theme-surface: #3b1f18;
+  --theme-card: #2a1712;
+  --theme-text: #f8fafc;
+  --theme-muted: #f1d7c9;
+  --theme-accent: #facc15;
+  --theme-border: #4b2a22;
+  --theme-font: "Crimson Pro", serif;
+}
+
+[data-theme="exchange"] {
+  --theme-bg: #0f172a;
+  --theme-surface: #111827;
+  --theme-card: #0b1220;
+  --theme-text: #e2e8f0;
+  --theme-muted: #94a3b8;
+  --theme-accent: #22c55e;
+  --theme-border: #1e293b;
+  --theme-font: "Space Grotesk", system-ui, sans-serif;
+}
+
+[data-theme="construction"] {
+  --theme-bg: #0f2b5b;
+  --theme-surface: #163872;
+  --theme-card: #112b58;
+  --theme-text: #f8fafc;
+  --theme-muted: #cbd5f5;
+  --theme-accent: #f97316;
+  --theme-border: #1e3a8a;
+  --theme-font: "Space Grotesk", system-ui, sans-serif;
+}
+
+[data-theme="detective"] {
+  --theme-bg: #292524;
+  --theme-surface: #1c1917;
+  --theme-card: #1f1b1a;
+  --theme-text: #f5f5f4;
+  --theme-muted: #d6d3d1;
+  --theme-accent: #f59e0b;
+  --theme-border: #44403c;
+  --theme-font: "Special Elite", ui-monospace, serif;
+}
+
+[data-theme="culinary"] {
+  --theme-bg: #e5e7eb;
+  --theme-surface: #ffffff;
+  --theme-card: #f8fafc;
+  --theme-text: #1f2937;
+  --theme-muted: #6b7280;
+  --theme-accent: #f97316;
+  --theme-border: #d1d5db;
+  --theme-font: "Sora", system-ui, sans-serif;
+}
+
+body {
+  background: var(--theme-bg);
+  color: var(--theme-text);
+  font-family: var(--theme-font);
+}
+
+@keyframes adminFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.admin-shell-main {
+  animation: adminFade 0.6s ease both;
+}
+
+.theme-bg {
+  background: var(--theme-bg);
+  color: var(--theme-text);
+}
+
+.theme-surface {
+  background: var(--theme-surface);
+  border-color: var(--theme-border);
+}
+
+.theme-card {
+  background: var(--theme-card);
+  border-color: var(--theme-border);
+}
+
+.theme-muted {
+  color: var(--theme-muted);
+}
+
+.theme-text {
+  color: var(--theme-text);
+}
+
+.theme-accent {
+  color: var(--theme-accent);
+}
+
+.theme-accent-bg {
+  background: var(--theme-accent);
+  color: #ffffff;
+}
+
+.theme-border {
+  border-color: var(--theme-border);
+}

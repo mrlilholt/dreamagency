@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { 
-    ArrowRight, Hexagon, Layers, PenTool, Globe, 
+    ArrowRight, Layers, PenTool, Globe, 
     ShieldCheck, X, CheckCircle, Loader2, Send 
 } from "lucide-react";
 
@@ -29,11 +29,9 @@ export default function LandingPage() {
       
       {/* --- NAVBAR --- */}
       <nav className="flex items-center justify-between px-6 py-6 max-w-7xl mx-auto relative z-20">
-        <div className="flex items-center gap-2 font-black text-2xl tracking-tighter text-slate-900">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
-            <Hexagon size={20} fill="currentColor" />
-          </div>
-          The DREAM<span className="text-indigo-600">AGENCY</span>
+        <div className="flex items-center gap-3 font-black text-2xl tracking-tighter text-slate-900">
+          <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-8 w-auto" />
+          XP Labs
         </div>
 
         <div className="hidden md:flex gap-8 font-bold text-slate-500 text-sm">
@@ -73,7 +71,7 @@ export default function LandingPage() {
               </span>
             </h1>
             <p className="text-xl text-slate-500 font-medium mb-8 max-w-lg leading-relaxed">
-              The Dream Agency creates brand experiences for the world's most ambitious companies. We turn abstract concepts into design dominance.
+              XP Labs creates brand experiences for the world's most ambitious companies. We turn abstract concepts into design dominance.
             </p>
             <div className="flex gap-4">
                {/* BUTTON TRIGGERS MODAL */}
@@ -104,7 +102,7 @@ export default function LandingPage() {
                     <div className="text-slate-400">Optimizing geometry...</div>
                     <div className="text-indigo-400">Loading assets: [####################] 100%</div>
                     <div className="p-4 bg-slate-800 rounded mt-4 border border-slate-700 text-cyan-300">
-                        {`{ "agency": "DREAM", "status": "ELITE" }`}
+                        {`{ "agency": "XP LABS", "status": "ELITE" }`}
                     </div>
                 </div>
              </div>
@@ -139,12 +137,12 @@ export default function LandingPage() {
       {/* --- FOOTER --- */}
       <footer className="bg-slate-50 border-t border-slate-200 py-12">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-2 font-black text-slate-900">
-                <Hexagon size={16} fill="currentColor" className="text-indigo-600" />
-                DREAM AGENCY
+            <div className="flex items-center gap-3 font-black text-slate-900">
+                <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-5 w-auto" />
+                XP Labs
             </div>
             <div className="text-slate-400 text-sm">
-                © 2024 Dream Agency Design Group. All rights reserved.
+                © 2024 XP Labs Design Group. All rights reserved.
             </div>
             <Link to="/login" className="text-xs font-bold text-indigo-600 hover:text-indigo-800">
                 INTERNAL SYSTEMS
@@ -253,7 +251,7 @@ export default function LandingPage() {
                                 <div className="flex items-start gap-3 p-3 bg-indigo-50 rounded-lg">
                                     <input type="checkbox" required id="nda" className="mt-1 w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
                                     <label htmlFor="nda" className="text-xs text-indigo-900 font-medium cursor-pointer leading-tight">
-                                        I acknowledge that all submitted materials are subject to the Dream Agency Non-Disclosure Agreement (NDA) and Intellectual Property protocols.
+                                        I acknowledge that all submitted materials are subject to the XP Labs Non-Disclosure Agreement (NDA) and Intellectual Property protocols.
                                     </label>
                                 </div>
                             </form>

@@ -14,6 +14,7 @@ import {
     Music, HelpCircle, Percent 
 } from "lucide-react";
 import Navbar from "../../components/Navbar"; 
+import { useTheme } from "../../context/ThemeContext";
 
 // 1. THE ICON MAP
 export const ICON_MAP = {
@@ -46,6 +47,8 @@ export default function RewardShop() {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(null);
+  const { theme } = useTheme();
+  const labels = theme.labels;
 
   // --- LISTENERS ---
   useEffect(() => {
@@ -145,13 +148,13 @@ export default function RewardShop() {
       }
   };
 
-  if (loading) return <div className="p-10 text-center text-slate-400">Loading Market...</div>;
+  if (loading) return <div className="p-10 text-center text-slate-400">Loading {labels.shop}...</div>;
 
   // Check if a sale is active (if any item has an original_price)
   const isMarketCrash = shopItems.some(i => i.original_price);
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <div className="min-h-screen theme-bg pb-20">
       <Navbar />
 
       <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-8">
@@ -159,18 +162,18 @@ export default function RewardShop() {
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-end gap-4">
             <div>
-                <h1 className="text-3xl font-black text-slate-900 flex items-center gap-2">
-                    <ShoppingBag className="text-indigo-600" /> Reward Shop
+                <h1 className="text-3xl font-black theme-text flex items-center gap-2">
+                    <ShoppingBag className="text-indigo-600" /> {labels.shop}
                 </h1>
-                <p className="text-slate-500 font-medium">Spend your hard-earned cash on real life rewards.</p>
+                <p className="theme-muted font-medium">Spend your hard-earned {labels.currency.toLowerCase()} on real life rewards.</p>
             </div>
-            <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200 flex items-center gap-2">
+            <div className="theme-surface px-4 py-2 rounded-xl shadow-sm border theme-border flex items-center gap-2">
                 <div className="bg-emerald-100 p-2 rounded-full">
                     <DollarSign size={20} className="text-emerald-600" />
                 </div>
                 <div>
-                    <p className="text-xs text-slate-400 font-bold uppercase">Your Balance</p>
-                    <p className="text-xl font-black text-slate-900">${userData?.currency || 0}</p>
+                    <p className="text-xs theme-muted font-bold uppercase">{labels.currency} Balance</p>
+                    <p className="text-xl font-black theme-text">${userData?.currency || 0}</p>
                 </div>
             </div>
         </div>
@@ -204,7 +207,7 @@ export default function RewardShop() {
                 return (
                     <div 
                         key={item.id} 
-                        className={`relative group bg-white rounded-xl p-5 border shadow-sm transition-all hover:shadow-md flex flex-col justify-between h-full
+                        className={`relative group theme-surface rounded-xl p-5 border theme-border shadow-sm transition-all hover:shadow-md flex flex-col justify-between h-full
                         ${outOfStock ? "opacity-60 grayscale border-slate-200" : ""}
                         ${isOnSale ? "border-red-200 ring-1 ring-red-100 bg-red-50/10" : "border-slate-200"}
                         `}
@@ -228,8 +231,8 @@ export default function RewardShop() {
                                 )}
                             </div>
                             
-                            <h3 className="font-bold text-slate-900 text-lg leading-tight mb-1">{item.title}</h3>
-                            <p className="text-sm text-slate-500 leading-snug">{item.desc}</p>
+                            <h3 className="font-bold theme-text text-lg leading-tight mb-1">{item.title}</h3>
+                            <p className="text-sm theme-muted leading-snug">{item.desc}</p>
                             
                             {/* STOCK COUNTER */}
                             {!outOfStock && (
@@ -280,21 +283,21 @@ export default function RewardShop() {
 
         {/* INVENTORY SECTION */}
         <div className="border-t border-slate-200 pt-8">
-            <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <h2 className="text-xl font-bold theme-text mb-6 flex items-center gap-2">
                 <Briefcase className="text-slate-400" /> Your Inventory
             </h2>
             {inventory.length === 0 ? (
-                <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400">
+                <div className="text-center py-10 theme-card rounded-xl border border-dashed theme-border theme-muted">
                     <Ghost size={48} className="mx-auto mb-2 opacity-20" />
                     You haven't bought anything yet. Go shopping!
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {inventory.map((item, index) => (
-                        <div key={index} className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between shadow-sm">
+                        <div key={index} className="theme-surface p-4 rounded-xl border theme-border flex items-center justify-between shadow-sm">
                             <div>
-                                <span className="font-bold text-slate-700 block text-sm">{item.name}</span>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                <span className="font-bold theme-text block text-sm">{item.name}</span>
+                                <span className="text-[10px] font-bold theme-muted uppercase">
                                     {new Date(item.purchaseDate).toLocaleDateString()}
                                 </span>
                             </div>

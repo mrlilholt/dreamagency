@@ -21,6 +21,7 @@ import {
     TrendingUp
 } from "lucide-react";
 import Navbar from "../components/Navbar";
+import { useTheme } from "../context/ThemeContext";
 
 const DEFAULT_STAGE_TEMPLATES = [
   { name: "Research & Ideate", req: "Submit 3 sketches and research links." },
@@ -55,8 +56,10 @@ const normalizeStageMap = (stages) => {
 
 export default function ContractDetails() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const labels = theme.labels;
 
   const [contract, setContract] = useState(null);
   const [activeJob, setActiveJob] = useState(null);
@@ -171,17 +174,17 @@ export default function ContractDetails() {
   const totalPotentialXP = (contract.xp_reward || 0) * totalStages;
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <div className="min-h-screen theme-bg pb-20">
       <Navbar /> 
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         
-        <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 mb-6 transition">
+        <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 theme-muted hover:theme-accent mb-6 transition">
             <ArrowLeft size={18} /> Back to Dashboard
         </button>
 
         {/* HEADER CARD */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+        <div className="theme-surface rounded-2xl shadow-sm border theme-border overflow-hidden mb-8">
             <div className="bg-slate-900 p-8 text-white relative overflow-hidden">
                 <div className="relative z-10">
                     <div className="flex justify-between items-start">
@@ -194,7 +197,7 @@ export default function ContractDetails() {
                         
                         {/* TOTAL VALUE BADGE */}
                         <div className="text-right hidden sm:block">
-                            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Total Contract Value</p>
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Total {labels.assignment} Value</p>
                             <div className="flex items-center gap-3 justify-end">
                                 <span className="text-2xl font-black text-green-400 flex items-center gap-1">
                                     <DollarSign size={20} className="text-green-500" />{totalPotentialMoney}
@@ -214,7 +217,7 @@ export default function ContractDetails() {
                              </div>
                              <div>
                                  <span className="block text-lg font-bold text-white leading-none">${contract.bounty}</span>
-                                 <span className="text-xs text-slate-400 uppercase font-bold">Payout Per Stage</span>
+                                 <span className="text-xs text-slate-400 uppercase font-bold">{labels.currency} Per Stage</span>
                              </div>
                         </div>
 
@@ -224,7 +227,7 @@ export default function ContractDetails() {
                              </div>
                              <div>
                                  <span className="block text-lg font-bold text-white leading-none">{contract.xp_reward} XP</span>
-                                 <span className="text-xs text-slate-400 uppercase font-bold">XP Per Stage</span>
+                                 <span className="text-xs text-slate-400 uppercase font-bold">{labels.xp} Per Stage</span>
                              </div>
                         </div>
                         
@@ -248,20 +251,20 @@ export default function ContractDetails() {
             </div>
             
             <div className="p-8">
-                <h3 className="font-bold text-slate-900 mb-2">Mission Brief</h3>
-                <p className="text-slate-600 leading-relaxed mb-8">{contract.description}</p>
+                <h3 className="font-bold theme-text mb-2">{labels.assignment} Brief</h3>
+                <p className="theme-muted leading-relaxed mb-8">{contract.description}</p>
 
                 {/* START BUTTON */}
                 {!isStarted && (
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
-                        <p className="text-slate-500 mb-4 text-sm font-medium">
-                            Ready to begin? This mission pays <strong>${contract.bounty}</strong> upon completion of <strong>each stage</strong>.
+                    <div className="theme-card border theme-border rounded-xl p-8 text-center">
+                        <p className="theme-muted mb-4 text-sm font-medium">
+                            Ready to begin? This {labels.assignment.toLowerCase()} pays <strong>${contract.bounty}</strong> upon completion of <strong>each stage</strong>.
                         </p>
                         <button 
                             onClick={startContract}
                             className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-xl transition shadow-lg shadow-indigo-200"
                         >
-                            Accept Mission
+                            Accept {labels.assignment}
                         </button>
                     </div>
                 )}
@@ -271,9 +274,9 @@ export default function ContractDetails() {
         {/* STAGES VIEW (Only if Started) */}
         {isStarted && (
             <div>
-                <h3 className="text-lg font-black text-slate-800 mb-4 px-2 flex justify-between items-center">
-                    <span>Project Milestones</span>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <h3 className="text-lg font-black theme-text mb-4 px-2 flex justify-between items-center">
+                    <span>{labels.assignment} Milestones</span>
+                    <span className="text-xs font-bold theme-muted uppercase tracking-wider">
                         Stage {currentStageNum} of {totalStages}
                     </span>
                 </h3>
@@ -296,7 +299,7 @@ export default function ContractDetails() {
                         const isRejected = stage.status === 'returned';
 
                         return (
-                            <div key={num} className={`bg-white border rounded-xl p-6 transition-all ${
+                            <div key={num} className={`theme-surface border theme-border rounded-xl p-6 transition-all ${
                                 isCurrent ? "border-indigo-500 ring-4 ring-indigo-50 shadow-lg" : "border-slate-200 opacity-60"
                             } ${isLocked ? "grayscale bg-slate-50" : ""}`}>
                                 
@@ -309,7 +312,7 @@ export default function ContractDetails() {
                                             {isCompleted ? <CheckCircle size={16}/> : num}
                                         </div>
                                         <div>
-                                            <h4 className={`font-bold ${isCurrent ? "text-indigo-900" : "text-slate-700"}`}>{stage.name}</h4>
+                                            <h4 className={`font-bold ${isCurrent ? "theme-accent" : "theme-text"}`}>{stage.name}</h4>
                                             
                                             {/* Status Badges */}
                                             <div className="flex items-center gap-2 mt-1">
@@ -324,12 +327,12 @@ export default function ContractDetails() {
                                     {/* Reward Tag per stage */}
                                     {!isLocked && !isCompleted && (
                                         <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">
-                                            Reward: ${contract.bounty}
+                                            {labels.currency}: ${contract.bounty}
                                         </span>
                                     )}
                                 </div>
 
-                                <p className="text-sm text-slate-600 mb-4 pl-11">{stage.req}</p>
+                                <p className="text-sm theme-muted mb-4 pl-11">{stage.req}</p>
                                 
                                 {/* FEEDBACK DISPLAY */}
                                 {stage.feedback && (
@@ -343,15 +346,15 @@ export default function ContractDetails() {
                                 {isCurrent && !isPending && (
                                     <div className="pl-11">
                                         <div className="mb-4">
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Submission Link</label>
+                                            <label className="block text-xs font-bold theme-muted uppercase mb-2">Submission Link</label>
                                             <input 
                                                 type="text" 
-                                                className="w-full border border-slate-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                                                className="w-full border theme-border rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
                                                 placeholder="https://docs.google.com/..."
                                                 value={submissionLink}
                                                 onChange={(e) => setSubmissionLink(e.target.value)}
                                             />
-                                            <p className="text-xs text-slate-400 mt-2">Paste a link to your Google Doc, Slide, or Image.</p>
+                                            <p className="text-xs theme-muted mt-2">Paste a link to your Google Doc, Slide, or Image.</p>
                                         </div>
 
                                         <button 
