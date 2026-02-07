@@ -42,6 +42,8 @@ export default function StudentDashboard() {
   
   const [contracts, setContracts] = useState([]);
   const [activeJobs, setActiveJobs] = useState({}); 
+  const [sideHustles, setSideHustles] = useState([]);
+  const [sideHustleJobs, setSideHustleJobs] = useState({});
 // --- NEW: DAILY MISSION STATE ---
   const [dailyMission, setDailyMission] = useState(null);
   const [showMissionModal, setShowMissionModal] = useState(false);
@@ -62,34 +64,46 @@ export default function StudentDashboard() {
   useEffect(() => {
     if (!user?.uid) return;
     
-    const unsubscribe = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            
-            // A. Update Stats
-            setStats({
-                currency: data.currency || 0,
-                xp: data.xp || 0,
-                completed_missions: data.completed_missions || []
-            });
-            // B. Update Class List
-            // If the array exists, use it. If not, use the single class_id.
-            if (data.enrolled_classes && data.enrolled_classes.length > 0) {
-                setAllowedClasses(data.enrolled_classes);
-            } else if (data.class_id) {
-                setAllowedClasses([data.class_id]);
+    const unsubscribe = onSnapshot(
+        doc(db, "users", user.uid),
+        (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                
+                // A. Update Stats
+                setStats({
+                    currency: data.currency || 0,
+                    xp: data.xp || 0,
+                    completed_missions: data.completed_missions || []
+                });
+                // B. Update Class List
+                // If the array exists, use it. If not, use the single class_id.
+                if (data.enrolled_classes && data.enrolled_classes.length > 0) {
+                    setAllowedClasses(data.enrolled_classes);
+                } else if (data.class_id) {
+                    setAllowedClasses([data.class_id]);
+                }
             }
+        },
+        (error) => {
+            console.error("StudentDashboard user listener failed:", error);
         }
-    });
+    );
     return () => unsubscribe();
   }, [user]);
 
   useEffect(() => {
     if (!userData?.class_id) return;
-    const unsub = onSnapshot(doc(db, "classes", userData.class_id), (snap) => {
-      if (!snap.exists()) return;
-      setClassThemeId(snap.data()?.theme_id || "agency");
-    });
+    const unsub = onSnapshot(
+      doc(db, "classes", userData.class_id),
+      (snap) => {
+        if (!snap.exists()) return;
+        setClassThemeId(snap.data()?.theme_id || "agency");
+      },
+      (error) => {
+        console.error("StudentDashboard class listener failed:", error);
+      }
+    );
     return () => unsub();
   }, [userData?.class_id]);
 
@@ -139,17 +153,44 @@ export default function StudentDashboard() {
         where("class_id", "in", allowedClasses)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const liveContracts = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            // Filter for "open" status here (Safest way to avoid Index errors)
-            .filter(job => job.status === "open");
+    const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+            const liveContracts = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                // Filter for "open" status here (Safest way to avoid Index errors)
+                .filter(job => job.status === "open");
 
-        setContracts(liveContracts);
-    });
+            setContracts(liveContracts);
+        },
+        (error) => {
+            console.error("StudentDashboard contracts listener failed:", error);
+        }
+    );
 
     return () => unsubscribe();
   }, [allowedClasses]); 
+
+  // 2b. LIVE LISTENER: Side Hustles (Always-on promos)
+  useEffect(() => {
+    if (allowedClasses.length === 0) return;
+
+    const unsubscribe = onSnapshot(
+      collection(db, "side_hustles"),
+      (snapshot) => {
+        const liveHustles = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(hustle => hustle.class_id === "all" || allowedClasses.includes(hustle.class_id));
+
+        setSideHustles(liveHustles);
+      },
+      (error) => {
+        console.error("StudentDashboard side hustle listener failed:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [allowedClasses]);
 
   // 3. LIVE LISTENER: Active Jobs (Student Progress)
   useEffect(() => {
@@ -161,16 +202,49 @@ export default function StudentDashboard() {
         where("student_id", "==", user.uid)
     );
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const mapping = {};
-        snapshot.docs.forEach(doc => {
-            const data = doc.data();
-            mapping[data.contract_id] = data;
-        });
-        setActiveJobs(mapping);
-    });
+    const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+            const mapping = {};
+            snapshot.docs.forEach(doc => {
+                const data = doc.data();
+                mapping[data.contract_id] = data;
+            });
+            setActiveJobs(mapping);
+        },
+        (error) => {
+            console.error("StudentDashboard active jobs listener failed:", error);
+        }
+    );
     return () => unsubscribe();
   }, [user]);// <--- dependency ensures it updates if user data changes
+
+  // 3b. LIVE LISTENER: Side Hustle Jobs (Student Progress)
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const q = query(
+      collection(db, "side_hustle_jobs"),
+      where("student_id", "==", user.uid)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const mapping = {};
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          mapping[data.side_hustle_id] = { id: doc.id, ...data };
+        });
+        setSideHustleJobs(mapping);
+      },
+      (error) => {
+        console.error("StudentDashboard side hustle jobs listener failed:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
 
   const handleClaimMission = async (e) => {
       e.preventDefault();
@@ -220,6 +294,10 @@ export default function StudentDashboard() {
   const nextLevelXp = currentLevel * 1000;
   const progress = ((stats.xp % 1000) / 1000) * 100;
   
+  const visibleSideHustles = sideHustles.filter(hustle =>
+    hustle.class_id === "all" || allowedClasses.includes(hustle.class_id)
+  );
+
   return (
     <div className="min-h-screen theme-bg pb-20">
       <Navbar />
@@ -278,6 +356,91 @@ export default function StudentDashboard() {
                 <div className="absolute right-0 top-0 w-32 h-32 bg-indigo-50 rounded-full -mr-10 -mt-10 group-hover:scale-110 transition duration-500"></div>
             </div>
             
+        </div>
+
+        {/* SIDE HUSTLES */}
+        <div className="mb-10">
+            <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold theme-text flex items-center gap-2">
+                    <PlayCircle className="text-slate-400" size={20}/> Side Hustles
+                </h2>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Always On
+                </span>
+            </div>
+
+            {visibleSideHustles.length === 0 ? (
+                <div className="p-6 text-center theme-muted border-2 border-dashed theme-border rounded-xl theme-card">
+                    No side hustles active for your class yet.
+                </div>
+            ) : (
+                <div className="flex gap-4 overflow-x-auto pb-4 -mx-2 px-2">
+                    {visibleSideHustles.map(hustle => {
+                        const job = sideHustleJobs[hustle.id];
+                        const isPending = job?.status === "pending_review";
+                        const currentLevel = job?.current_level || 1;
+                        const levels = Array.isArray(hustle.levels) ? hustle.levels : [];
+                        const levelData = levels[currentLevel - 1];
+                        const levelLabel = levelData?.title || `Level ${currentLevel}`;
+                        const levelCash = levelData?.reward_cash ?? hustle.reward_cash ?? 0;
+                        const levelXp = levelData?.reward_xp ?? hustle.reward_xp ?? 0;
+                        const cardImage = hustle.image_url || "/side.png";
+
+                        return (
+                            <button
+                                key={hustle.id}
+                                onClick={() => navigate(`/side-hustle/${hustle.id}`)}
+                                className="relative min-w-[260px] sm:min-w-[320px] h-40 rounded-2xl overflow-hidden border theme-border shadow-sm hover:shadow-md transition group text-left"
+                            >
+                                <div
+                                    className="absolute inset-0 bg-slate-900 bg-cover bg-center"
+                                    style={{ backgroundImage: `url(${cardImage})` }}
+                                ></div>
+                                <div className="absolute inset-0 bg-gradient-to-l from-black/60 via-black/20 to-black/10"></div>
+
+                                <div className="relative z-10 h-full p-4 flex flex-col justify-between">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] uppercase font-bold tracking-wider bg-black/40 text-white px-2 py-1 rounded">
+                                            Side Hustle
+                                        </span>
+                                        {isPending ? (
+                                            <span className="text-[10px] uppercase font-bold tracking-wider bg-yellow-300 text-yellow-900 px-2 py-1 rounded flex items-center gap-1">
+                                                <Clock size={12}/> Review
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] uppercase font-bold tracking-wider bg-white/80 text-slate-900 px-2 py-1 rounded">
+                                                {levelLabel}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="text-right">
+                                        <p className="text-xs uppercase tracking-widest text-white/80 font-bold">
+                                            {hustle.tagline || "Always On"}
+                                        </p>
+                                        <h3 className="text-lg font-black text-white leading-tight">
+                                            {hustle.title}
+                                        </h3>
+                                        {hustle.summary && (
+                                            <p className="text-xs text-white/80 mt-1 line-clamp-1">
+                                                {hustle.summary}
+                                            </p>
+                                        )}
+                                        <div className="mt-2 flex justify-end gap-2 text-xs font-bold">
+                                            <span className="bg-emerald-500/90 text-white px-2 py-1 rounded flex items-center gap-1">
+                                                <DollarSign size={12}/> {levelCash}
+                                            </span>
+                                            <span className="bg-indigo-500/90 text-white px-2 py-1 rounded flex items-center gap-1">
+                                                <Zap size={12}/> {levelXp} {labels.xp}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
         </div>
 
         <h2 className="text-xl font-bold theme-text mb-4 flex items-center gap-2">

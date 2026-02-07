@@ -7,7 +7,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Layout, Trophy, ShoppingBag, LogOut, User } from "lucide-react";
 
 export default function Navbar() {
-  const { user, userData, logout } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const { theme } = useTheme();
   const labels = theme.labels;
@@ -19,16 +19,22 @@ export default function Navbar() {
   useEffect(() => {
     if (!user?.uid) return;
 
-    const unsub = onSnapshot(doc(db, "users", user.uid), (docSnapshot) => {
-        if (docSnapshot.exists()) {
-            const data = docSnapshot.data();
-            setStats({
-                currency: data.currency || 0,
-                xp: data.xp || 0,
-                displayName: data.displayName || user.displayName // Fallback to Auth name
-            });
+    const unsub = onSnapshot(
+        doc(db, "users", user.uid),
+        (docSnapshot) => {
+            if (docSnapshot.exists()) {
+                const data = docSnapshot.data();
+                setStats({
+                    currency: data.currency || 0,
+                    xp: data.xp || 0,
+                    displayName: data.displayName || user.displayName // Fallback to Auth name
+                });
+            }
+        },
+        (error) => {
+            console.error("Navbar user listener failed:", error);
         }
-    });
+    );
 
     return () => unsub();
   }, [user]);

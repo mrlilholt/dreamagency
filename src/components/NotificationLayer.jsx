@@ -6,8 +6,7 @@ import {
     collection, 
     query, 
     where, 
-    deleteDoc,  // <--- This was likely missing
-    updateDoc 
+    deleteDoc  // <--- This was likely missing
 } from "firebase/firestore";
 import { useAuth } from "../context/AuthContext";
 import { BADGES } from "../lib/gameConfig";
@@ -23,6 +22,25 @@ export default function NotificationLayer() {
   // Refs to store "Previous State" so we can detect changes
   const prevXpRef = useRef(null);
   const prevJobsRef = useRef({}); 
+
+  // --- HELPER FUNCTIONS ---
+  const triggerPopup = (config) => {
+      setNotification(config);
+      // Auto-dismiss simple updates after 5 seconds, keep Badges until clicked
+      if (config.type !== 'badge') {
+          setTimeout(() => setNotification(null), 6000);
+      }
+  };
+
+  const fireConfetti = () => {
+      if (typeof confetti === 'function') {
+          confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+      }
+  };
+
+  const handleClose = () => {
+      setNotification(null);
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -78,6 +96,8 @@ export default function NotificationLayer() {
             }
         }
         prevXpRef.current = currentXp;
+    }, (error) => {
+        console.error("NotificationLayer user listener failed:", error);
     });
 
     // --- LISTENER 2: ACTIVE JOBS (Stage Progress) ---
@@ -117,6 +137,8 @@ export default function NotificationLayer() {
             prevJobsRef.current[jobId] = currentStage;
             prevJobsRef.current[jobId + '_status'] = status;
         });
+    }, (error) => {
+        console.error("NotificationLayer jobs listener failed:", error);
     });
 
     // --- LISTENER 3: MANUAL ADMIN MESSAGES (ALERTS) ---
@@ -147,41 +169,14 @@ export default function NotificationLayer() {
                 }
             }
         });
+    }, (error) => {
+        console.error("NotificationLayer alerts listener failed:", error);
     });
 
     return () => { unsubUser(); unsubJobs(); unsubAlerts(); };
   }, [user]);
 
-  // --- HELPER FUNCTIONS ---
-
-  const triggerPopup = (config) => {
-      setNotification(config);
-      // Auto-dismiss simple updates after 5 seconds, keep Badges until clicked
-      if (config.type !== 'badge') {
-          setTimeout(() => setNotification(null), 6000);
-      }
-  };
-
-  const fireConfetti = () => {
-      if (typeof confetti === 'function') {
-          confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
-      }
-  };
-
-  const handleClose = async () => {
-      if (notification?.type === 'badge' && user) {
-          try {
-            const userRef = doc(db, "users", user.uid);
-            // We can't use 'import' inside handler easily in Vite without async config
-            // So we rely on the helper or assume strict mode is fine.
-            // Simplified cleanup: Just UI close for now, database was handled by previous logic or manual 'Read' button?
-            // Actually, badges need a 'new: false' update.
-            // Let's do a simple read-modify-write here if needed, or rely on a "Mark Read" button in Profile.
-            // For now, just closing the popup is fine.
-          } catch(e) { console.error(e) }
-      }
-      setNotification(null);
-  };
+  // --- RENDER ---
 
   if (!notification) return null;
 

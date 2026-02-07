@@ -56,7 +56,7 @@ const normalizeStageMap = (stages) => {
 
 export default function ContractDetails() {
   const { id } = useParams();
-  const { user, userData } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { theme } = useTheme();
   const labels = theme.labels;
@@ -70,14 +70,21 @@ export default function ContractDetails() {
   useEffect(() => {
     if (!id) return;
     const docRef = doc(db, "contracts", id);
-    const unsub = onSnapshot(docRef, (snap) => {
-        if (snap.exists()) {
-            setContract({ id: snap.id, ...snap.data() });
-        } else {
-            setContract(null);
+    const unsub = onSnapshot(
+        docRef,
+        (snap) => {
+            if (snap.exists()) {
+                setContract({ id: snap.id, ...snap.data() });
+            } else {
+                setContract(null);
+            }
+            setLoading(false);
+        },
+        (error) => {
+            console.error("ContractDetails contract listener failed:", error);
+            setLoading(false);
         }
-        setLoading(false);
-    });
+    );
     return () => unsub();
   }, [id]);
 
@@ -85,13 +92,19 @@ export default function ContractDetails() {
   useEffect(() => {
     if (!user || !id) return;
     const jobRef = doc(db, "active_jobs", `${user.uid}_${id}`);
-    const unsub = onSnapshot(jobRef, (docSnap) => {
-        if (docSnap.exists()) {
-            setActiveJob(docSnap.data());
-        } else {
-            setActiveJob(null);
+    const unsub = onSnapshot(
+        jobRef,
+        (docSnap) => {
+            if (docSnap.exists()) {
+                setActiveJob(docSnap.data());
+            } else {
+                setActiveJob(null);
+            }
+        },
+        (error) => {
+            console.error("ContractDetails job listener failed:", error);
         }
-    });
+    );
     return () => unsub();
   }, [user, id]);
 

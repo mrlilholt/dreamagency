@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { db } from "../../lib/firebase";
 import { 
   collection, 
@@ -59,9 +58,16 @@ const REJECTION_REASONS = [
     "Other (Write below)"
 ];
 
-export default function AdminDashboard() {
-  const navigate = useNavigate();
+const BASE_SIDE_HUSTLE_REWARD = { cash: 50, xp: 25 };
+const getAutoLevelRewards = (levelNumber) => {
+    const multiplier = Math.pow(2, Math.max(0, levelNumber - 1));
+    return {
+        reward_cash: BASE_SIDE_HUSTLE_REWARD.cash * multiplier,
+        reward_xp: BASE_SIDE_HUSTLE_REWARD.xp * multiplier
+    };
+};
 
+export default function AdminDashboard() {
   // --- STATE ---
   const [submissions, setSubmissions] = useState([]);
   const [stats, setStats] = useState({ activeCount: 0, agentCount: 0 });
@@ -97,9 +103,25 @@ export default function AdminDashboard() {
 const [viewArchive, setViewArchive] = useState(false);
 const [showDailyMissions, setShowDailyMissions] = useState(false);  
 const [missions, setMissions] = useState([]);
-// --- MISSION TABS STATE ---
-  const [missionTab, setMissionTab] = useState("active"); // 'active' | 'archive'
   const [editingMissionId, setEditingMissionId] = useState(null);
+  // --- SIDE HUSTLES STATE ---
+  const [sideHustles, setSideHustles] = useState([]);
+  const [sideHustleSubmissions, setSideHustleSubmissions] = useState([]);
+  const [showSideHustleEditor, setShowSideHustleEditor] = useState(false);
+  const [editingSideHustleId, setEditingSideHustleId] = useState(null);
+  const [sideHustleForm, setSideHustleForm] = useState({
+      title: "",
+      tagline: "",
+      summary: "",
+      details: "",
+      reward_cash: 50,
+      reward_xp: 25,
+      class_id: "all",
+      image_url: ""
+  });
+  const [sideHustleLevels, setSideHustleLevels] = useState([
+      { title: "Level 1", req: "", ...getAutoLevelRewards(1) }
+  ]);
   const [classForm, setClassForm] = useState({
       id: "",
       code: "",
@@ -194,12 +216,36 @@ const [missions, setMissions] = useState([]);
       return () => unsub();
   }, []);
 
+  // FETCH SIDE HUSTLES
+  useEffect(() => {
+      const unsub = onSnapshot(collection(db, "side_hustles"), (snap) => {
+          setSideHustles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+      return () => unsub();
+  }, []);
+
+  // FETCH SIDE HUSTLE SUBMISSIONS
+  useEffect(() => {
+      const unsub = onSnapshot(collection(db, "side_hustle_jobs"), (snap) => {
+          const pending = [];
+          snap.docs.forEach(d => {
+              const data = d.data();
+              if (data.status === "pending_review") {
+                  pending.push({ id: d.id, ...data });
+              }
+          });
+          pending.sort((a, b) => (a.submitted_at?.seconds || 0) - (b.submitted_at?.seconds || 0));
+          setSideHustleSubmissions(pending);
+      });
+      return () => unsub();
+  }, []);
+
   // AUTO-SELECT FIRST CLASS (Once availableClasses loads)
   useEffect(() => {
       if(availableClasses.length > 0 && !newMission.class_id) {
           setNewMission(prev => ({ ...prev, class_id: availableClasses[0] }));
       }
-  }, [availableClasses]);
+  }, [availableClasses, newMission.class_id]);
 
   const handleCreateMission = async (e) => {
       e.preventDefault();
@@ -225,6 +271,114 @@ const [missions, setMissions] = useState([]);
       if(confirm("Delete this mission?")) {
           await deleteDoc(doc(db, "daily_missions", id));
       }
+  };
+
+  const resetSideHustleForm = () => {
+      setSideHustleForm({
+          title: "",
+          tagline: "",
+          summary: "",
+          details: "",
+          reward_cash: 50,
+          reward_xp: 25,
+          class_id: "all",
+          image_url: ""
+      });
+      setSideHustleLevels([{ title: "Level 1", req: "", ...getAutoLevelRewards(1) }]);
+      setEditingSideHustleId(null);
+  };
+
+  const handleSideHustleLevelChange = (index, field, value) => {
+      const nextLevels = [...sideHustleLevels];
+      nextLevels[index][field] = value;
+      setSideHustleLevels(nextLevels);
+  };
+
+  const addSideHustleLevel = () => {
+      const nextLevelNumber = sideHustleLevels.length + 1;
+      setSideHustleLevels([
+          ...sideHustleLevels,
+          {
+              title: `Level ${nextLevelNumber}`,
+              req: "",
+              ...getAutoLevelRewards(nextLevelNumber)
+          }
+      ]);
+  };
+
+  const removeSideHustleLevel = (index) => {
+      if (sideHustleLevels.length === 1) return;
+      setSideHustleLevels(sideHustleLevels.filter((_, i) => i !== index));
+  };
+
+  const handleSaveSideHustle = async (e) => {
+      e.preventDefault();
+
+      const cleanedLevels = sideHustleLevels
+          .map((level, index) => ({
+              title: level.title || `Level ${index + 1}`,
+              req: level.req || "",
+              reward_cash: Number(level.reward_cash ?? getAutoLevelRewards(index + 1).reward_cash) || 0,
+              reward_xp: Number(level.reward_xp ?? getAutoLevelRewards(index + 1).reward_xp) || 0
+          }))
+          .filter(level => level.title || level.req);
+
+      const payload = {
+          ...sideHustleForm,
+          reward_cash: Number(sideHustleForm.reward_cash) || 0,
+          reward_xp: Number(sideHustleForm.reward_xp) || 0,
+          levels: cleanedLevels,
+          updatedAt: serverTimestamp()
+      };
+
+      try {
+          if (editingSideHustleId) {
+              await updateDoc(doc(db, "side_hustles", editingSideHustleId), payload);
+          } else {
+              await addDoc(collection(db, "side_hustles"), {
+                  ...payload,
+                  createdAt: serverTimestamp()
+              });
+          }
+          resetSideHustleForm();
+      } catch (error) {
+          console.error("Error saving side hustle:", error);
+          alert(error?.message || "Error saving side hustle.");
+      }
+  };
+
+  const handleEditSideHustle = (hustle) => {
+      setSideHustleForm({
+          title: hustle.title || "",
+          tagline: hustle.tagline || "",
+          summary: hustle.summary || "",
+          details: hustle.details || "",
+          reward_cash: hustle.reward_cash || 0,
+          reward_xp: hustle.reward_xp || 0,
+          class_id: hustle.class_id || "all",
+          image_url: hustle.image_url || ""
+      });
+      setSideHustleLevels(
+          Array.isArray(hustle.levels) && hustle.levels.length > 0
+              ? hustle.levels.map((level, index) => ({
+                  title: level.title || `Level ${index + 1}`,
+                  req: level.req || "",
+                  reward_cash: level.reward_cash ?? getAutoLevelRewards(index + 1).reward_cash,
+                  reward_xp: level.reward_xp ?? getAutoLevelRewards(index + 1).reward_xp
+              }))
+              : [{
+                  title: "Level 1",
+                  req: "",
+                  ...getAutoLevelRewards(1)
+              }]
+      );
+      setEditingSideHustleId(hustle.id);
+      setShowSideHustleEditor(true);
+  };
+
+  const handleDeleteSideHustle = async (id) => {
+      if (!confirm("Delete this side hustle?")) return;
+      await deleteDoc(doc(db, "side_hustles", id));
   };
 
   const handleCreateClass = async (e) => {
@@ -468,6 +622,63 @@ const [missions, setMissions] = useState([]);
       }
   };
 
+  const approveSideHustleSubmission = async (job, hustle) => {
+      try {
+          const submittedLevel = Number(job.last_submitted_level || job.current_level || 1);
+          const levelData = Array.isArray(hustle?.levels) ? hustle.levels[submittedLevel - 1] : null;
+          const payAmount = levelData?.reward_cash ?? hustle?.reward_cash ?? 0;
+          const xpAmount = levelData?.reward_xp ?? hustle?.reward_xp ?? 0;
+
+          const totalLevels = Array.isArray(hustle?.levels) ? hustle.levels.length : 0;
+          const nextLevel = totalLevels > 0 ? Math.min(submittedLevel + 1, totalLevels) : submittedLevel + 1;
+
+          await updateDoc(doc(db, "users", job.student_id), {
+              currency: increment(Number(payAmount) || 0),
+              xp: increment(Number(xpAmount) || 0)
+          });
+
+          await updateDoc(doc(db, "side_hustle_jobs", job.id), {
+              status: "active",
+              current_level: nextLevel,
+              completed_count: increment(1),
+              last_approved_at: serverTimestamp(),
+              status_message: ""
+          });
+
+          await addDoc(collection(db, "users", job.student_id, "alerts"), {
+              type: "success",
+              message: `Side Hustle "${hustle?.title || job.side_hustle_title}" approved! +$${payAmount} and +${xpAmount} XP.`,
+              read: false,
+              createdAt: serverTimestamp()
+          });
+      } catch (error) {
+          console.error("Error approving side hustle:", error);
+          alert("Error approving side hustle.");
+      }
+  };
+
+  const returnSideHustleSubmission = async (job) => {
+      const reason = prompt("Return reason for this side hustle?");
+      if (!reason) return;
+      try {
+          await updateDoc(doc(db, "side_hustle_jobs", job.id), {
+              status: "active",
+              status_message: `Returned: ${reason}`,
+              last_returned_at: serverTimestamp()
+          });
+
+          await addDoc(collection(db, "users", job.student_id, "alerts"), {
+              type: "error",
+              message: `Side Hustle "${job.side_hustle_title}" returned: ${reason}`,
+              read: false,
+              createdAt: serverTimestamp()
+          });
+      } catch (error) {
+          console.error("Error returning side hustle:", error);
+          alert("Error returning side hustle.");
+      }
+  };
+
   const openRejectionModal = (job) => {
       setRejectingJob(job);
       setReason(REJECTION_REASONS[0]);
@@ -508,7 +719,10 @@ const [missions, setMissions] = useState([]);
               });
           }
           closeShopForm();
-      } catch (err) { alert("Error saving item"); }
+      } catch (error) { 
+          console.error("Error saving item:", error);
+          alert("Error saving item"); 
+      }
   };
 
   const deleteItem = async (id) => {
@@ -533,6 +747,11 @@ const [missions, setMissions] = useState([]);
   };
 
   // --- FILTERING ---
+  const sideHustleLookup = sideHustles.reduce((acc, hustle) => {
+      acc[hustle.id] = hustle;
+      return acc;
+  }, {});
+
   const filteredSubmissions = submissions.map(sub => {
       // HELPER: Normalize the link so the filter AND the button see the same thing
       // We attach a 'displayLink' property to the object if it's missing, 
@@ -606,87 +825,115 @@ const [missions, setMissions] = useState([]);
             </div>
         </div>
 
-        {/* MISSION LOG */}
-        <div className="mb-8">
-            <div className="flex justify-between items-center mb-3">
-                 <h3 className="font-bold text-slate-700 text-sm uppercase">Mission Log (Newest First)</h3>
-                 <button onClick={() => setShowDailyMissions(true)} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition">
-                    Open Mission Control
-                 </button>
-            </div>
-            <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                      {/* 1. CHECK ACTIVE MISSIONS ONLY */}
-                      {activeMissions.length === 0 ? (
-                          <div className="text-slate-400 text-sm italic p-4 border border-dashed rounded-lg text-center">
-                              No active orders for today or the future.
-                          </div>
-                ) : (
-                    activeMissions.map(m => (
-                              <div key={m.id} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-lg hover:border-indigo-200 transition group">
-                                  <div className="flex items-center gap-4">
-                                      {/* Date Badge */}
-                                      <div className="text-center bg-slate-100 px-3 py-1 rounded-lg min-w-[80px]">
-                                          <div className="text-xs font-bold text-slate-400 uppercase">
-                                              {new Date(m.active_date + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short'})}
-                                          </div>
-                                          <div className="text-sm font-black text-slate-700">
-                                              {m.active_date.slice(5)}
-                                          </div>
-                                      </div>
-
-                                      <div className="min-w-0">
-                                          <div className="flex items-center gap-2 mb-1">
-                                              <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
-                                                  {m.class_id}
-                                              </span>
-                                              <h4 className="font-bold text-slate-700 truncate">{m.title}</h4>
-                                          </div>
-                                          <p className="text-xs text-slate-500 truncate max-w-md">
-                                              {m.instruction} 
-                                          </p>
-                                      </div>
-                                  </div>
-
-                                  <button onClick={() => handleDeleteMission(m.id)} className="text-slate-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100">
-                                      <Trash2 size={18} />
-                                  </button>
-                              </div>
-                    ))
-                )}
-            </div>
-        </div>
-
         {/* ==================== TAB 1: APPROVALS ==================== */}
         {activeTab === "approvals" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                
-                {/* STATS CARDS */}
-                <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p className="text-slate-400 text-xs font-bold uppercase">Pending Reviews</p>
-                            <p className="text-3xl font-black text-slate-900">{submissions.length}</p>
+        <div className="space-y-8">
+
+                {/* TOP ROW: STATS + MISSION LOG */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4 lg:col-span-1">
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-slate-400 text-xs font-bold uppercase">Pending Reviews</p>
+                                <p className="text-3xl font-black text-slate-900">{submissions.length}</p>
+                            </div>
+                            <div className="bg-orange-100 p-3 rounded-full text-orange-600"><Inbox size={24}/></div>
                         </div>
-                        <div className="bg-orange-100 p-3 rounded-full text-orange-600"><Inbox size={24}/></div>
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-slate-400 text-xs font-bold uppercase">Active Agents</p>
+                                <p className="text-3xl font-black text-slate-900">{stats.agentCount}</p>
+                            </div>
+                            <div className="bg-indigo-100 p-3 rounded-full text-indigo-600"><Users size={24}/></div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-slate-400 text-xs font-bold uppercase">Missions Underway</p>
+                                <p className="text-3xl font-black text-slate-900">{stats.activeCount}</p>
+                            </div>
+                            <div className="bg-blue-100 p-3 rounded-full text-blue-600"><Zap size={24}/></div>
+                        </div>
+
+                        {/* SIDE HUSTLES CONTROL */}
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <p className="text-slate-400 text-xs font-bold uppercase">Side Hustles</p>
+                                    <p className="text-slate-500 text-xs">Always-on promo projects with repeatable rewards.</p>
+                                    <div className="flex items-center gap-2 mt-2 text-[10px] font-bold uppercase text-slate-400">
+                                        <span>{sideHustles.length} live</span>
+                                        <span className="text-slate-300">•</span>
+                                        <span>{sideHustleSubmissions.length} pending</span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowSideHustleEditor(true)}
+                                    className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition"
+                                >
+                                    Open Manager
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p className="text-slate-400 text-xs font-bold uppercase">Active Agents</p>
-                            <p className="text-3xl font-black text-slate-900">{stats.agentCount}</p>
+
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col lg:col-span-2">
+                        <div className="flex justify-between items-center mb-3">
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-bold text-slate-700 text-sm uppercase">Mission Log</h3>
+                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                                    {activeMissions.length}
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => setShowDailyMissions(true)}
+                                className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition"
+                            >
+                                Open Mission Control
+                            </button>
                         </div>
-                        <div className="bg-indigo-100 p-3 rounded-full text-indigo-600"><Users size={24}/></div>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p className="text-slate-400 text-xs font-bold uppercase">Missions Underway</p>
-                            <p className="text-3xl font-black text-slate-900">{stats.activeCount}</p>
+                        <div className="space-y-2 max-h-[360px] overflow-y-auto">
+                            {activeMissions.length === 0 ? (
+                                <div className="text-slate-400 text-sm italic p-4 border border-dashed rounded-lg text-center">
+                                    No active orders for today or the future.
+                                </div>
+                            ) : (
+                                activeMissions.map(m => (
+                                    <div key={m.id} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-lg hover:border-indigo-200 transition group">
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-center bg-slate-100 px-3 py-1 rounded-lg min-w-[80px]">
+                                                <div className="text-xs font-bold text-slate-400 uppercase">
+                                                    {new Date(m.active_date + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short'})}
+                                                </div>
+                                                <div className="text-sm font-black text-slate-700">
+                                                    {m.active_date.slice(5)}
+                                                </div>
+                                            </div>
+
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
+                                                        {m.class_id}
+                                                    </span>
+                                                    <h4 className="font-bold text-slate-700 truncate">{m.title}</h4>
+                                                </div>
+                                                <p className="text-xs text-slate-500 truncate max-w-md">
+                                                    {m.instruction} 
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <button onClick={() => handleDeleteMission(m.id)} className="text-slate-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100">
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
                         </div>
-                        <div className="bg-blue-100 p-3 rounded-full text-blue-600"><Zap size={24}/></div>
                     </div>
                 </div>
 
                 {/* APPROVAL QUEUE */}
-                <div className="lg:col-span-3">
+                <div>
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center bg-slate-50 gap-4">
                             <h2 className="font-bold text-slate-800 flex items-center gap-2">
@@ -801,6 +1048,99 @@ const [missions, setMissions] = useState([]);
                                         </div>
                                     </div>
                                 ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* SIDE HUSTLE QUEUE */}
+                <div>
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center bg-slate-50 gap-4">
+                            <h2 className="font-bold text-slate-800 flex items-center gap-2">
+                                <Rocket className="text-indigo-600" size={20} />
+                                Side Hustle Queue
+                            </h2>
+                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                                {sideHustleSubmissions.length}
+                            </span>
+                        </div>
+
+                        <div className="divide-y divide-slate-100">
+                            {sideHustleSubmissions.length === 0 ? (
+                                <div className="p-12 text-center text-slate-400">
+                                    <CheckCircle size={48} className="mx-auto mb-4 opacity-20" />
+                                    <p>No side hustle submissions waiting.</p>
+                                </div>
+                            ) : (
+                                sideHustleSubmissions.map(job => {
+                                    const hustle = sideHustleLookup[job.side_hustle_id];
+                                    const displayLink = job.submission_link || job.submissionLink || job.submission_url;
+                                    const levelLabel = job.last_submitted_level || job.current_level || 1;
+
+                                    return (
+                                        <div key={job.id} className="p-6 flex flex-col md:flex-row items-center justify-between gap-4 hover:bg-slate-50 transition">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <h3 className="font-bold text-slate-900 truncate text-lg">
+                                                        {job.side_hustle_title || hustle?.title || "Side Hustle"}
+                                                    </h3>
+                                                    {displayLink ? (
+                                                        <a
+                                                            href={displayLink.startsWith('http') ? displayLink : `https://${displayLink}`}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-100 transition"
+                                                            title="View Work"
+                                                        >
+                                                            <ExternalLink size={14} /> View Work
+                                                        </a>
+                                                    ) : (
+                                                        <span className="flex items-center gap-1 text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-1 rounded cursor-not-allowed">
+                                                            <HelpCircle size={14} /> No Link
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-sm text-slate-500 flex flex-wrap items-center gap-2">
+                                                    <span className="font-bold text-slate-700">{job.student_name}</span>
+                                                    <span className="text-slate-300">•</span>
+                                                    <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-200">
+                                                        {hustle?.class_id || "All Classes"}
+                                                    </span>
+                                                    <span className="text-slate-300">•</span>
+                                                    <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                                        Level {levelLabel}
+                                                    </span>
+                                                    {job.submitted_at?.seconds && (
+                                                        <>
+                                                            <span className="text-slate-300">•</span>
+                                                            <span>
+                                                                {new Date(job.submitted_at.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                                {job.status_message && (
+                                                    <p className="text-xs text-amber-600 mt-2">{job.status_message}</p>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-3 shrink-0">
+                                                <button
+                                                    onClick={() => returnSideHustleSubmission(job)}
+                                                    className="px-4 py-2 bg-white border border-slate-300 text-slate-600 font-bold rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition text-sm flex items-center gap-2"
+                                                >
+                                                    <AlertTriangle size={16}/> Return
+                                                </button>
+                                                <button
+                                                    onClick={() => approveSideHustleSubmission(job, hustle)}
+                                                    className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md hover:shadow-lg transition text-sm flex items-center gap-2"
+                                                >
+                                                    <CheckCircle size={16}/> Approve
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })
                             )}
                         </div>
                     </div>
@@ -1217,6 +1557,273 @@ const [missions, setMissions] = useState([]);
             </div>
         </div>
       )}
+
+      {/* --- SIDE HUSTLE MANAGER MODAL --- */}
+      {showSideHustleEditor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden border border-slate-200 max-h-[90vh] flex flex-col">
+                
+                {/* HEADER */}
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                    <h2 className="font-black text-lg text-slate-800 flex items-center gap-2">
+                        <Rocket className="text-indigo-600"/> SIDE HUSTLE MANAGER
+                    </h2>
+                    <button 
+                        onClick={() => setShowSideHustleEditor(false)} 
+                        className="p-2 hover:bg-slate-200 rounded-full transition"
+                    >
+                        <X size={20} className="text-slate-500" />
+                    </button>
+                </div>
+
+                {/* CONTENT GRID */}
+                <div className="p-6 overflow-y-auto bg-slate-50/50">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        
+                        {/* LEFT: FORM */}
+                        <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                                    {editingSideHustleId ? (
+                                        <><Pencil size={18} className="text-indigo-600"/> Edit Side Hustle</>
+                                    ) : (
+                                        <><Plus size={18} className="text-indigo-600"/> New Side Hustle</>
+                                    )}
+                                </h3>
+                                {editingSideHustleId && (
+                                    <button 
+                                        type="button"
+                                        onClick={resetSideHustleForm}
+                                        className="text-xs font-bold text-red-500 hover:text-red-700 underline"
+                                    >
+                                        Cancel
+                                    </button>
+                                )}
+                            </div>
+
+                            <form onSubmit={handleSaveSideHustle} className="space-y-4 text-sm">
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Title</label>
+                                    <input
+                                        type="text"
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                                        value={sideHustleForm.title}
+                                        onChange={(e) => setSideHustleForm({ ...sideHustleForm, title: e.target.value })}
+                                        placeholder="e.g. Flash Promo: AI Poster"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500">Tagline</label>
+                                        <input
+                                            type="text"
+                                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                                            value={sideHustleForm.tagline}
+                                            onChange={(e) => setSideHustleForm({ ...sideHustleForm, tagline: e.target.value })}
+                                            placeholder="ALWAYS ON"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500">Class</label>
+                                        <select
+                                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                                            value={sideHustleForm.class_id}
+                                            onChange={(e) => setSideHustleForm({ ...sideHustleForm, class_id: e.target.value })}
+                                        >
+                                            <option value="all">All Classes</option>
+                                            {Object.values(CLASS_CODES).map((cls) => (
+                                                <option key={cls.id} value={cls.id}>
+                                                    {cls.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Card Summary</label>
+                                    <input
+                                        type="text"
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                                        value={sideHustleForm.summary}
+                                        onChange={(e) => setSideHustleForm({ ...sideHustleForm, summary: e.target.value })}
+                                        placeholder="Short teaser for the card"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Image URL</label>
+                                    <input
+                                        type="text"
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                                        value={sideHustleForm.image_url}
+                                        onChange={(e) => setSideHustleForm({ ...sideHustleForm, image_url: e.target.value })}
+                                        placeholder="/side.png or hosted URL"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Main Briefing</label>
+                                    <textarea
+                                        rows="3"
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                                        value={sideHustleForm.details}
+                                        onChange={(e) => setSideHustleForm({ ...sideHustleForm, details: e.target.value })}
+                                        placeholder="Describe the side hustle..."
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Default Cash ($)</label>
+                                        <input
+                                            type="number"
+                                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                                            value={sideHustleForm.reward_cash}
+                                            onChange={(e) => setSideHustleForm({ ...sideHustleForm, reward_cash: Number(e.target.value) })}
+                                        />
+                                    </div>
+                                    <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Default XP</label>
+                                        <input
+                                            type="number"
+                                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                                            value={sideHustleForm.reward_xp}
+                                            onChange={(e) => setSideHustleForm({ ...sideHustleForm, reward_xp: Number(e.target.value) })}
+                                        />
+                                    </div>
+                                </div>
+
+                                <details className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                                    <summary className="text-xs font-bold uppercase text-slate-500 cursor-pointer">
+                                        Levels (Rewards Per Level)
+                                    </summary>
+                                    <div className="space-y-2 mt-3">
+                                        {sideHustleLevels.map((level, index) => (
+                                            <div key={index} className="grid grid-cols-[1fr,2fr,auto] gap-2 items-start">
+                                                <div className="space-y-2">
+                                                    <input
+                                                        className="border border-slate-300 rounded-lg px-2 py-1 text-xs w-full"
+                                                        value={level.title}
+                                                        onChange={(e) => handleSideHustleLevelChange(index, "title", e.target.value)}
+                                                        placeholder={`Level ${index + 1}`}
+                                                    />
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <input
+                                                            type="number"
+                                                            className="border border-slate-300 rounded-lg px-2 py-1 text-xs w-full"
+                                                            value={level.reward_cash ?? ""}
+                                                            onChange={(e) => handleSideHustleLevelChange(index, "reward_cash", Number(e.target.value))}
+                                                            placeholder="Cash"
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            className="border border-slate-300 rounded-lg px-2 py-1 text-xs w-full"
+                                                            value={level.reward_xp ?? ""}
+                                                            onChange={(e) => handleSideHustleLevelChange(index, "reward_xp", Number(e.target.value))}
+                                                            placeholder="XP"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <input
+                                                    className="border border-slate-300 rounded-lg px-2 py-1 text-xs h-full"
+                                                    value={level.req}
+                                                    onChange={(e) => handleSideHustleLevelChange(index, "req", e.target.value)}
+                                                    placeholder="Requirement"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeSideHustleLevel(index)}
+                                                    className="text-slate-400 hover:text-red-500 px-2"
+                                                    title="Remove level"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={addSideHustleLevel}
+                                        className="mt-3 w-full border border-dashed border-slate-300 text-slate-500 text-xs font-bold py-2 rounded-lg hover:border-indigo-400 hover:text-indigo-600 transition"
+                                    >
+                                        + Add Level
+                                    </button>
+                                </details>
+
+                                <button
+                                    type="submit"
+                                    className="w-full bg-slate-900 text-white font-bold py-2 rounded-lg hover:bg-indigo-600 transition"
+                                >
+                                    {editingSideHustleId ? "Save Changes" : "Publish Side Hustle"}
+                                </button>
+                            </form>
+                        </div>
+
+                        {/* RIGHT: LIVE LIST */}
+                        <div className="lg:col-span-2">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xs font-bold uppercase text-slate-400">Live Hustles</h3>
+                                <span className="text-xs text-slate-400">{sideHustles.length} total</span>
+                            </div>
+                            {sideHustles.length === 0 ? (
+                                <div className="p-10 text-center border-2 border-dashed border-slate-200 rounded-xl text-slate-400">
+                                    No side hustles yet.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {sideHustles.map((hustle) => (
+                                        <div key={hustle.id} className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between">
+                                            <div>
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div>
+                                                        <p className="text-sm font-bold text-slate-800">{hustle.title}</p>
+                                                        <p className="text-[10px] text-slate-400 uppercase">{hustle.class_id || "all"}</p>
+                                                    </div>
+                                                    <div className="text-xs font-bold text-slate-500">
+                                                        ${hustle.reward_cash} • {hustle.reward_xp} XP
+                                                    </div>
+                                                </div>
+                                                {hustle.summary && (
+                                                    <p className="text-xs text-slate-500 mt-2 line-clamp-2">{hustle.summary}</p>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center justify-between mt-4">
+                                                <span className="text-[10px] text-slate-400">
+                                                    {Array.isArray(hustle.levels) ? hustle.levels.length : 0} levels
+                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleEditSideHustle(hustle)}
+                                                        className="text-slate-400 hover:text-amber-600 p-2 rounded-lg hover:bg-amber-50 transition"
+                                                        title="Edit"
+                                                    >
+                                                        <Pencil size={16} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteSideHustle(hustle.id)}
+                                                        className="text-slate-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition"
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
       {/* --- DAILY ORDERS MODAL --- */}
       {/* --- DAILY ORDERS MODAL --- */}
       {showDailyMissions && (
@@ -1473,7 +2080,6 @@ const [missions, setMissions] = useState([]);
             </div>
         </div>
       )}
-      </div>
     </AdminShell>
   );
 }

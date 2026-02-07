@@ -3,7 +3,6 @@ import { useAuth } from "../context/AuthContext";
 import { CLASS_CODES, INITIAL_STATS } from "../lib/gameConfig";
 import { doc, setDoc, serverTimestamp, collection, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { useNavigate } from "react-router-dom";
 import { Terminal, ArrowRight, AlertCircle } from "lucide-react";
 
 export default function Onboarding() {
@@ -12,7 +11,6 @@ export default function Onboarding() {
   const [loading, setLoading] = useState(false);
   const [availableClasses, setAvailableClasses] = useState([]);
   const { user } = useAuth(); // The Google User
-  const navigate = useNavigate();
 
   useEffect(() => {
     const loadClasses = async () => {

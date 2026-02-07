@@ -37,11 +37,6 @@ export default function AllContracts() {
   const [editingBadgeId, setEditingBadgeId] = useState(null);
   const [badgeForm, setBadgeForm] = useState({ title: "", description: "", xpReward: 0, iconName: "medal" });
 
-  // --- INITIAL FETCH ---
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
       setLoading(true);
       
@@ -62,6 +57,12 @@ export default function AllContracts() {
       
       setLoading(false);
   };
+
+  // --- INITIAL FETCH ---
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchData();
+  }, []);
 
   // --- CONTRACT ACTIONS ---
   const handleDeleteContract = async (id) => {

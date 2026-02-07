@@ -26,7 +26,7 @@ export default function AdminShell({ children }) {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef2ff_0%,_#f8fafc_45%,_#ffffff_100%)] text-slate-900">
       <div className="flex min-h-screen">
-        <aside className="w-16 md:w-20 bg-white/80 backdrop-blur border-r border-slate-200 flex flex-col items-center py-6 gap-6">
+        <aside className="relative z-50 w-16 md:w-20 bg-white/80 backdrop-blur border-r border-slate-200 flex flex-col items-center py-6 gap-6">
           <Link to="/dashboard" className="flex items-center justify-center w-10 h-10 rounded-2xl bg-slate-900 text-white font-black shadow-lg">
             <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-5 w-5" />
           </Link>
@@ -45,7 +45,7 @@ export default function AdminShell({ children }) {
                   }`}
                 >
                   <Icon size={18} />
-                  <span className="pointer-events-none absolute left-14 whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white shadow-lg opacity-0 translate-x-2 transition group-hover:opacity-100 group-hover:translate-x-0">
+                  <span className="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white shadow-lg opacity-0 translate-x-2 transition group-hover:opacity-100 group-hover:translate-x-0">
                     {item.label}
                   </span>
                 </Link>

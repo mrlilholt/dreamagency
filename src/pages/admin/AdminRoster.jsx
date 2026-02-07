@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { db } from "../../lib/firebase";
-import { collection, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, setDoc, query, orderBy, writeBatch, deleteDoc, arrayRemove, arrayUnion } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, writeBatch, arrayRemove, arrayUnion } from "firebase/firestore";
 import { CLASS_CODES } from "../../lib/gameConfig"; // <--- REMOVED "BADGES"
 import { 
     Users, Filter, Search, DollarSign, 
@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import AdminShell from "../../components/AdminShell";
 import { useAuth } from "../../context/AuthContext";
-import { THEME_CONFIG, THEME_OPTIONS, resolveThemeId } from "../../lib/themeConfig";
+import { THEME_CONFIG, resolveThemeId } from "../../lib/themeConfig";
 import { useTheme } from "../../context/ThemeContext";
 
 export default function AdminRoster() {
@@ -16,19 +16,10 @@ export default function AdminRoster() {
   const [students, setStudents] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [availableBadges, setAvailableBadges] = useState([]); // <--- NEW: Dynamic Badges from DB
-  const { user, userData } = useAuth();
+  const { user } = useAuth();
   const { theme } = useTheme();
   const labels = theme.labels;
   const [classes, setClasses] = useState([]);
-  const [classForm, setClassForm] = useState({
-      id: "",
-      code: "",
-      name: "",
-      division: "MS",
-      department: "",
-      theme_id: "agency"
-  });
-  const [isSavingClass, setIsSavingClass] = useState(false);
   const [filterClass, setFilterClass] = useState("all");
   const [filterDivision, setFilterDivision] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -173,101 +164,10 @@ export default function AdminRoster() {
     newInventory.splice(itemIndex, 1); 
     try {
         await updateDoc(doc(db, "users", studentId), { inventory: newInventory });
-    } catch (err) { alert("Error redeeming item"); }
-  };
-
-  const handleCreateClass = async (e) => {
-    e.preventDefault();
-    if (!classForm.id || !classForm.code || !classForm.name) {
-        alert("Please provide class code, ID, and name.");
-        return;
+    } catch (error) { 
+        console.error("Error redeeming item:", error);
+        alert("Error redeeming item");
     }
-    setIsSavingClass(true);
-    try {
-        await setDoc(doc(db, "classes", classForm.id.trim()), {
-            id: classForm.id.trim(),
-            code: classForm.code.trim().toUpperCase(),
-            name: classForm.name.trim(),
-            division: classForm.division,
-            department: classForm.department.trim() || null,
-            theme_id: classForm.theme_id || "agency",
-            createdAt: serverTimestamp()
-        });
-        setClassForm({
-            id: "",
-            code: "",
-            name: "",
-            division: "MS",
-            department: "",
-            theme_id: "agency"
-        });
-    } catch (error) {
-        console.error("Create class failed:", error);
-        alert("Failed to create class.");
-    } finally {
-        setIsSavingClass(false);
-    }
-  };
-
-  const handleThemeUpdate = async (classId, nextTheme) => {
-      try {
-          await updateDoc(doc(db, "classes", classId), {
-              theme_id: nextTheme,
-              updatedAt: new Date().toISOString()
-          });
-      } catch (error) {
-          console.error("Theme update failed:", error);
-          alert("Failed to update class theme.");
-      }
-  };
-
-  const handleSyncClasses = async () => {
-      if (!confirm("Sync CLASS_CODES into Firestore classes?")) return;
-      const existingIds = new Set(classes.map((cls) => cls.id));
-      const entries = Object.entries(CLASS_CODES);
-      try {
-          await Promise.all(entries.map(async ([code, cls]) => {
-              if (!cls?.id) return;
-              const payload = {
-                  id: cls.id,
-                  code,
-                  name: cls.name,
-                  division: cls.division || null,
-                  department: cls.department || null,
-                  theme_id: cls.theme ? resolveThemeId(cls.theme) : "agency",
-                  updatedAt: new Date().toISOString()
-              };
-              if (existingIds.has(cls.id)) {
-                  await updateDoc(doc(db, "classes", cls.id), payload);
-              } else {
-                  await setDoc(doc(db, "classes", cls.id), {
-                      ...payload,
-                      createdAt: serverTimestamp()
-                  });
-              }
-          }));
-      } catch (error) {
-          console.error("Class sync failed:", error);
-          alert("Failed to sync classes.");
-      }
-  };
-
-  const handleSyncUserDivisions = async () => {
-      if (!confirm("Backfill user division fields from class data?")) return;
-      try {
-          await Promise.all(students.map(async (student) => {
-              if (!student.class_id) return;
-              const classInfo = classDirectorySource.find((cls) => cls.id === student.class_id);
-              if (!classInfo || student.division) return;
-              await updateDoc(doc(db, "users", student.id), {
-                  division: classInfo.division || null,
-                  updatedAt: new Date().toISOString()
-              });
-          }));
-      } catch (error) {
-          console.error("User division sync failed:", error);
-          alert("Failed to sync user divisions.");
-      }
   };
 
   // --- FILTERING ---
@@ -304,16 +204,6 @@ export default function AdminRoster() {
 
   const getClassName = (id) => classDirectorySource.find(c => c.id === id)?.name || "Unknown Class";
   const getName = (s) => s.name || s.displayName || `Unknown ${labels.student}`;
-  const classDirectory = classDirectorySource
-      .filter((cls) => !cls.role)
-      .reduce((acc, cls) => {
-          const division = cls.division || "Unassigned";
-          const department = cls.department || cls.name;
-          if (!acc[division]) acc[division] = {};
-          if (!acc[division][department]) acc[division][department] = [];
-          acc[division][department].push(cls);
-          return acc;
-      }, {});
   const getSubmissionLinks = (job) => {
       const stages = job?.stages || {};
       return Object.entries(stages)
@@ -638,155 +528,6 @@ export default function AdminRoster() {
                     </div>
                 </div>
             )}
-
-            {["admin", "super_admin", "department_admin", "teacher_admin"].includes(userData?.role) && (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
-                    <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Create Class</h2>
-                    <form onSubmit={handleCreateClass} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-                        <div className="md:col-span-2">
-                            <label className="text-xs font-bold uppercase text-slate-500">Class Name</label>
-                            <input
-                                type="text"
-                                className="w-full border border-slate-300 rounded-lg px-3 py-2"
-                                placeholder="e.g. 7th Grade CS"
-                                value={classForm.name}
-                                onChange={(e) => setClassForm({ ...classForm, name: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold uppercase text-slate-500">Class ID</label>
-                            <input
-                                type="text"
-                                className="w-full border border-slate-300 rounded-lg px-3 py-2 font-mono"
-                                placeholder="e.g. 7th_cs"
-                                value={classForm.id}
-                                onChange={(e) => setClassForm({ ...classForm, id: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold uppercase text-slate-500">Join Code</label>
-                            <input
-                                type="text"
-                                className="w-full border border-slate-300 rounded-lg px-3 py-2 font-mono"
-                                placeholder="e.g. CS7"
-                                value={classForm.code}
-                                onChange={(e) => setClassForm({ ...classForm, code: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold uppercase text-slate-500">Division</label>
-                            <select
-                                className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white"
-                                value={classForm.division}
-                                onChange={(e) => setClassForm({ ...classForm, division: e.target.value })}
-                            >
-                                <option value="LS">LS</option>
-                                <option value="MS">MS</option>
-                                <option value="US">US</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold uppercase text-slate-500">Theme</label>
-                            <select
-                                className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white"
-                                value={classForm.theme_id}
-                                onChange={(e) => setClassForm({ ...classForm, theme_id: e.target.value })}
-                            >
-                                {THEME_OPTIONS.map((themeOption) => (
-                                    <option key={themeOption.id} value={themeOption.id}>
-                                        {themeOption.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="text-xs font-bold uppercase text-slate-500">Department (optional)</label>
-                            <input
-                                type="text"
-                                className="w-full border border-slate-300 rounded-lg px-3 py-2"
-                                placeholder="e.g. Computer Science"
-                                value={classForm.department}
-                                onChange={(e) => setClassForm({ ...classForm, department: e.target.value })}
-                            />
-                        </div>
-                        <div className="md:col-span-2">
-                            <button
-                                type="submit"
-                                className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-lg hover:bg-indigo-700 transition"
-                                disabled={isSavingClass}
-                            >
-                                {isSavingClass ? "Creating..." : "Create Class"}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            )}
-
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Class Directory</h2>
-                    {["admin", "super_admin", "department_admin", "teacher_admin"].includes(userData?.role) && (
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={handleSyncClasses}
-                                className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
-                            >
-                                Sync CLASS_CODES
-                            </button>
-                            <button
-                                onClick={handleSyncUserDivisions}
-                                className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
-                            >
-                                Sync User Divisions
-                            </button>
-                        </div>
-                    )}
-                </div>
-                <div className="space-y-3">
-                    {Object.entries(classDirectory).map(([division, departments]) => (
-                        <details key={division} className="border border-slate-100 rounded-lg bg-slate-50 px-4 py-3">
-                            <summary className="cursor-pointer font-bold text-slate-700">
-                                {division} Division
-                            </summary>
-                            <div className="mt-3 space-y-2">
-                                {Object.entries(departments).map(([department, classes]) => (
-                                    <details key={`${division}-${department}`} className="border border-slate-100 rounded-lg bg-white px-3 py-2">
-                                        <summary className="cursor-pointer text-sm font-semibold text-slate-600">
-                                            {department}
-                                        </summary>
-                                        <ul className="mt-2 text-sm text-slate-500 space-y-1">
-                                            {classes.map((cls) => (
-                                                <li key={cls.id} className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                                    <div>
-                                                        <div className="font-medium text-slate-700">{cls.name}</div>
-                                                        <div className="text-[10px] uppercase tracking-widest text-slate-400">{cls.id}</div>
-                                                    </div>
-                                                    {["admin", "super_admin", "department_admin", "teacher_admin"].includes(userData?.role) && (
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] uppercase tracking-widest text-slate-400">Theme</span>
-                                                            <select
-                                                                className="border border-slate-200 rounded-md px-2 py-1 text-xs bg-white"
-                                                                value={cls.theme_id || "agency"}
-                                                                onChange={(e) => handleThemeUpdate(cls.id, e.target.value)}
-                                                            >
-                                                                {THEME_OPTIONS.map((themeOption) => (
-                                                                    <option key={themeOption.id} value={themeOption.id}>
-                                                                        {themeOption.name}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                        </div>
-                                                    )}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </details>
-                                ))}
-                            </div>
-                        </details>
-                    ))}
-                </div>
-            </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <table className="w-full text-left">

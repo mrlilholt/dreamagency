@@ -11,34 +11,38 @@ const ThemeContext = createContext({
 
 export function ThemeProvider({ children }) {
   const { userData } = useAuth();
-  const [themeId, setThemeId] = useState("agency");
+  const [classThemeId, setClassThemeId] = useState("agency");
+  const directThemeValue = userData?.theme_id || userData?.theme;
+  const directThemeId = useMemo(
+    () => (directThemeValue ? resolveThemeId(directThemeValue) : null),
+    [directThemeValue]
+  );
 
   useEffect(() => {
-    let unsubClass;
+    if (!userData?.class_id) return () => {};
 
-    const directThemeValue = userData?.theme_id || userData?.theme;
-    const directTheme = directThemeValue ? resolveThemeId(directThemeValue) : null;
-    if (!userData?.class_id) {
-      setThemeId(directTheme || "agency");
-      return () => {};
-    }
-
-    unsubClass = onSnapshot(doc(db, "classes", userData.class_id), (snap) => {
-      if (!snap.exists()) {
-        setThemeId(directTheme);
-        return;
+    const unsubClass = onSnapshot(
+      doc(db, "classes", userData.class_id),
+      (snap) => {
+        if (!snap.exists()) {
+          setClassThemeId("agency");
+          return;
+        }
+        const data = snap.data();
+        const classThemeValue = data?.theme_id || data?.theme;
+        const classTheme = classThemeValue ? resolveThemeId(classThemeValue) : "agency";
+        setClassThemeId(classTheme);
+      },
+      (error) => {
+        console.error("ThemeContext class listener failed:", error);
+        setClassThemeId("agency");
       }
-      const data = snap.data();
-      const classThemeValue = data?.theme_id || data?.theme;
-      const classTheme = classThemeValue ? resolveThemeId(classThemeValue) : "agency";
-      setThemeId(directTheme || classTheme);
-    });
+    );
 
-    return () => {
-      if (unsubClass) unsubClass();
-    };
-  }, [userData?.class_id, userData?.theme_id, userData?.theme]);
+    return () => unsubClass();
+  }, [userData?.class_id]);
 
+  const themeId = directThemeId || (userData?.class_id ? classThemeId : "agency");
   const theme = useMemo(() => THEME_CONFIG[themeId] || THEME_CONFIG.agency, [themeId]);
 
   useEffect(() => {
@@ -52,6 +56,7 @@ export function ThemeProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
   return useContext(ThemeContext);
 }

@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import ContractDetails from "./pages/ContractDetails";
+import SideHustleDetails from "./pages/SideHustleDetails";
 import RewardsShop from "./pages/dashboard/RewardShop";
 import CreateContract from "./pages/admin/CreateContract";
 import AllContracts from "./pages/admin/AllContracts";
@@ -67,6 +68,11 @@ function App() {
           <Route path="/contract/:id" element={
             <PrivateRoute>
               <ContractDetails />
+            </PrivateRoute>
+          } />
+          <Route path="/side-hustle/:id" element={
+            <PrivateRoute>
+              <SideHustleDetails />
             </PrivateRoute>
           } />
           <Route path="/shop" element={

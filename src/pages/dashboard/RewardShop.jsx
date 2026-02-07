@@ -17,7 +17,7 @@ import Navbar from "../../components/Navbar";
 import { useTheme } from "../../context/ThemeContext";
 
 // 1. THE ICON MAP
-export const ICON_MAP = {
+const ICON_MAP = {
     "life-buoy": <LifeBuoy size={24} className="text-red-500" />,
     "map-pin": <MapPin size={24} className="text-indigo-500" />,
     "music": <Music size={24} className="text-pink-500" />,
@@ -55,42 +55,55 @@ export default function RewardShop() {
     if (!user) return;
 
     // 1. User Data & Inventory
-    const unsubUser = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            setUserData(data);
-            setInventory(data.inventory || []); // Ensure array exists
+    const unsubUser = onSnapshot(
+        doc(db, "users", user.uid),
+        (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setUserData(data);
+                setInventory(data.inventory || []); // Ensure array exists
+            }
+        },
+        (error) => {
+            console.error("RewardShop user listener failed:", error);
         }
-    });
+    );
 
     // 2. Shop Items (Real-time to catch the sale immediately)
-    const unsubShop = onSnapshot(collection(db, "shop_items"), (snap) => {
-        const items = snap.docs.map(d => {
-            const data = d.data();
-            return {
-                id: d.id,
-                ...data,
-                // SAFETY: Force these to be numbers immediately
-                // If price is missing or text, it becomes 0.
-                price: Number(data.price) || 0,
-                stock: Number(data.stock) || 0,
-                original_price: data.original_price ? Number(data.original_price) : null
-            };
-        });
+    const unsubShop = onSnapshot(
+        collection(db, "shop_items"),
+        (snap) => {
+            const items = snap.docs.map(d => {
+                const data = d.data();
+                return {
+                    id: d.id,
+                    ...data,
+                    // SAFETY: Force these to be numbers immediately
+                    // If price is missing or text, it becomes 0.
+                    price: Number(data.price) || 0,
+                    stock: Number(data.stock) || 0,
+                    original_price: data.original_price ? Number(data.original_price) : null
+                };
+            });
 
-        // Sort: Cheapest first, but out-of-stock last
-        items.sort((a, b) => {
-            // Move out-of-stock items to the bottom
-            if (a.stock === 0 && b.stock > 0) return 1;
-            if (b.stock === 0 && a.stock > 0) return -1;
-            
-            // Standard price sort
-            return a.price - b.price;
-        });
+            // Sort: Cheapest first, but out-of-stock last
+            items.sort((a, b) => {
+                // Move out-of-stock items to the bottom
+                if (a.stock === 0 && b.stock > 0) return 1;
+                if (b.stock === 0 && a.stock > 0) return -1;
+                
+                // Standard price sort
+                return a.price - b.price;
+            });
 
-        setShopItems(items);
-        setLoading(false);
-    });
+            setShopItems(items);
+            setLoading(false);
+        },
+        (error) => {
+            console.error("RewardShop items listener failed:", error);
+            setLoading(false);
+        }
+    );
 
     return () => {
         unsubUser();

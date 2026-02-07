@@ -17,15 +17,20 @@ export function AuthProvider({ children }) {
       
       if (currentUser) {
         setUser(currentUser);
-        // 2. If they sign in, check our Database for their profile
-        const userRef = doc(db, "users", currentUser.uid);
-        const userSnap = await getDoc(userRef);
+        try {
+          // 2. If they sign in, check our Database for their profile
+          const userRef = doc(db, "users", currentUser.uid);
+          const userSnap = await getDoc(userRef);
 
-        if (userSnap.exists()) {
-          // They have an account! Load their XP, Role, etc.
-          setUserData(userSnap.data());
-        } else {
-          // They are new! We will handle this in the UI (redirect to Onboarding)
+          if (userSnap.exists()) {
+            // They have an account! Load their XP, Role, etc.
+            setUserData(userSnap.data());
+          } else {
+            // They are new! We will handle this in the UI (redirect to Onboarding)
+            setUserData(null);
+          }
+        } catch (error) {
+          console.error("Auth profile load failed:", error);
           setUserData(null);
         }
       } else {
@@ -58,6 +63,7 @@ export function AuthProvider({ children }) {
 }
 
 // A hook to let us use this easily in any component
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   return useContext(AuthContext);
 }

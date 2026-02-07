@@ -18,20 +18,41 @@ export default function Leaderboard() {
 
   useEffect(() => {
     // 1. Listen to Users
-    const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
-        setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    const unsubUsers = onSnapshot(
+        collection(db, "users"),
+        (snap) => {
+            setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        },
+        (error) => {
+            console.error("Leaderboard users listener failed:", error);
+            setLoading(false);
+        }
+    );
 
     // 2. Listen to Active Jobs
-    const unsubJobs = onSnapshot(collection(db, "active_jobs"), (snap) => {
-        setJobs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    const unsubJobs = onSnapshot(
+        collection(db, "active_jobs"),
+        (snap) => {
+            setJobs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        },
+        (error) => {
+            console.error("Leaderboard jobs listener failed:", error);
+            setLoading(false);
+        }
+    );
 
     // 3. Listen to Contracts (NEW: This is our source of truth for Tabs)
-    const unsubContracts = onSnapshot(collection(db, "contracts"), (snap) => {
-        setContracts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setLoading(false);
-    });
+    const unsubContracts = onSnapshot(
+        collection(db, "contracts"),
+        (snap) => {
+            setContracts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoading(false);
+        },
+        (error) => {
+            console.error("Leaderboard contracts listener failed:", error);
+            setLoading(false);
+        }
+    );
 
     return () => {
         unsubUsers();

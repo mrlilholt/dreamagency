@@ -8,10 +8,12 @@ import {
 export default function LandingPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formState, setFormState] = useState("idle"); // idle, submitting, success
+  const [referenceId, setReferenceId] = useState(null);
 
   const handleOpen = () => {
       setIsModalOpen(true);
       setFormState("idle");
+      setReferenceId(Math.floor(Math.random() * 9999));
   };
 
   const handleSubmit = (e) => {
@@ -184,7 +186,7 @@ export default function LandingPage() {
                             Your brief has been uploaded to our secure servers. Our intake algorithm is currently analyzing your request.
                         </p>
                         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm text-slate-600 mb-6">
-                            Reference ID: <span className="font-mono font-bold text-slate-900">#REQ-{Math.floor(Math.random() * 9999)}</span>
+                            Reference ID: <span className="font-mono font-bold text-slate-900">#REQ-{referenceId ?? "0000"}</span>
                         </div>
                         <button 
                             onClick={() => setIsModalOpen(false)}
