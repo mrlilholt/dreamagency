@@ -160,47 +160,61 @@ const [panicMode, setPanicMode] = useState(false);
   // --- HELPER FUNCTIONS ---
   const getAgentName = () => agentData?.name || agentData?.displayName || user?.displayName || "Unknown Agent";
   const getAgentPhoto = () => agentData?.photoURL || user?.photoURL || null;
+  const xpTotal = Number(agentData?.xp || 0);
+  const level = Math.floor(xpTotal / 1000) + 1;
+  const levelProgress = Math.min(100, Math.round(((xpTotal % 1000) / 1000) * 100));
+  const xpToNext = Math.max(0, level * 1000 - xpTotal);
 
   return (
     <div className="min-h-screen theme-bg pb-20">
       <Navbar />
       
       {/* HEADER BANNER */}
-      <div className="theme-surface border-b theme-border pb-20 pt-10 px-6">
-        <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-8">
-            {/* ID CARD HEADER */}
-            <div className="shrink-0">
-                {getAgentPhoto() ? (
-                    <img 
-                        src={getAgentPhoto()} 
-                        alt="Agent" 
-                        className="w-24 h-24 rounded-2xl object-cover shadow-lg shadow-slate-200/20 border-4 border-white/10"
-                        referrerPolicy="no-referrer"
-                    />
-                ) : (
-                    <div className="w-24 h-24 bg-indigo-600 rounded-2xl flex items-center justify-center text-4xl text-white font-black shadow-lg border-4 border-white/10">
-                        {getAgentName().charAt(0)}
+      <div className="relative overflow-hidden theme-surface border-b theme-border pb-10 pt-8 px-6">
+        <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute -left-24 -top-24 w-72 h-72 rounded-full bg-indigo-500/10 blur-3xl"></div>
+            <div className="absolute right-0 -top-16 w-80 h-80 rounded-full bg-emerald-400/10 blur-3xl"></div>
+            <div className="absolute bottom-0 left-1/2 w-[520px] h-40 -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 blur-2xl"></div>
+        </div>
+        <div className="relative max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* COLUMN 1: AGENT INFO */}
+            <div className="flex flex-col gap-4 text-center lg:text-left">
+                <div className="shrink-0 flex flex-col items-center lg:items-start gap-3">
+                    <div className="relative">
+                        {getAgentPhoto() ? (
+                            <img 
+                                src={getAgentPhoto()} 
+                                alt="Agent" 
+                                className="w-28 h-28 rounded-3xl object-cover shadow-xl border-4 border-white/30"
+                                referrerPolicy="no-referrer"
+                            />
+                        ) : (
+                            <div className="w-28 h-28 bg-indigo-600 rounded-3xl flex items-center justify-center text-4xl text-white font-black shadow-xl border-4 border-white/30">
+                                {getAgentName().charAt(0)}
+                            </div>
+                        )}
+                        <div className="absolute -bottom-2 -right-2 bg-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-slate-700 border border-slate-200 shadow-sm">
+                            Agent
+                        </div>
                     </div>
-                )}
-            </div>
-
-            <div className="text-center md:text-left flex-1">
-                <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
-                    <span className="bg-indigo-500/20 text-indigo-200 border border-indigo-500/30 text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">
-                        {agentData.class_id || "Unassigned"}
-                    </span>
-                    <span className="bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">
-                        Level {Math.floor((agentData.xp || 0) / 1000) + 1}
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className="bg-indigo-500/15 text-indigo-700 border border-indigo-200 text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                            {agentData.class_id || "Unassigned"}
+                        </span>
+                        <span className="bg-emerald-500/15 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                            Level {level}
+                        </span>
+                    </div>
                 </div>
-{/* DYNAMIC NAME SECTION */}
+
+                {/* DYNAMIC NAME SECTION */}
                 {isEditingName ? (
-                    <div className="flex items-center gap-2 mb-1 animate-in fade-in slide-in-from-left-4">
+                    <div className="flex items-center gap-2 mb-1 animate-in fade-in slide-in-from-left-4 justify-center lg:justify-start">
                         <input 
                             type="text" 
                             value={newName}
                             onChange={(e) => setNewName(e.target.value)}
-                            className="bg-slate-800 text-white font-bold px-3 py-1 rounded border border-slate-600 outline-none focus:border-indigo-500 w-full md:w-auto"
+                            className="bg-slate-800 text-white font-bold px-3 py-1 rounded border border-slate-600 outline-none focus:border-indigo-500 w-full lg:w-auto"
                             placeholder="New Code Name"
                             maxLength={20}
                             autoFocus
@@ -220,13 +234,10 @@ const [panicMode, setPanicMode] = useState(false);
                         </button>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-3 mb-1 group">
-                        {/* 1. Show the Name (Checks both fields to prevent "Agent" bug) */}
+                    <div className="flex items-center gap-3 mb-1 group justify-center lg:justify-start">
                         <h1 className="text-3xl font-black">
                             {agentData?.displayName || agentData?.name || "Agent"}
                         </h1>
-                        
-                        {/* 2. Show Button ONLY if they have the token */}
                         {hasNameChangeToken && (
                             <button 
                                 onClick={() => {
@@ -240,93 +251,97 @@ const [panicMode, setPanicMode] = useState(false);
                         )}
                     </div>
                 )}
-                
-                <p className="text-slate-400 text-sm">Agent ID: {user.uid.slice(0,8).toUpperCase()}</p>
-                {/* --- NEW BUTTON: CONTACT HQ --- */}
-                    <button 
-                        onClick={() => setShowSuggestionBox(true)}
-                        className="flex items-center gap-2 px-3 py-1 bg-white/10 hover:bg-white/20 text-white/80 text-xs font-bold uppercase tracking-wider rounded-full transition-all border border-white/10"
-                    >
-                        <Mail size={12} /> Contact HQ
-                    </button>
+
+                <p className="text-slate-500 text-sm font-medium">Agent ID: {user.uid.slice(0,8).toUpperCase()}</p>
+                <button 
+                    onClick={() => setShowSuggestionBox(true)}
+                    className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-white/70 hover:bg-white text-slate-700 text-xs font-bold uppercase tracking-wider rounded-full transition-all border border-slate-200 shadow-sm w-fit mx-auto lg:mx-0"
+                >
+                    <Mail size={12} /> Contact HQ
+                </button>
             </div>
 
-            <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm border border-white/10 text-center min-w-[120px]">
-                <div className="text-2xl font-black text-yellow-400">{agentData.xp || 0}</div>
-                <div className="text-xs font-bold text-slate-300 uppercase">Lifetime XP</div>
+            {/* COLUMN 2: XP SUMMARY */}
+            <div className="space-y-3 w-full">
+                <div className="bg-white/80 p-3 rounded-2xl border border-slate-200 text-center shadow-sm">
+                    <div className="text-2xl font-black text-amber-500">{xpTotal.toLocaleString()}</div>
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lifetime XP</div>
+                    <div className="mt-2 flex items-center justify-center gap-2 text-[11px] font-semibold text-slate-500">
+                        <Star size={12} className="text-amber-400" /> Rank: {level >= 20 ? "Director" : level >= 10 ? "Specialist" : "Rookie"}
+                    </div>
+                </div>
+                <div className="bg-white/80 p-3 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                        <span>Next Level</span>
+                        <span>{xpToNext.toLocaleString()} XP to go</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-200/70 overflow-hidden">
+                        <div
+                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500"
+                            style={{ width: `${levelProgress}%` }}
+                        ></div>
+                    </div>
+                </div>
+            </div>
+
+            {/* COLUMN 3: AGENT STATS */}
+            <div className="grid gap-3 w-full">
+                <div className="relative bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                    <div className="absolute -right-6 -bottom-6 bg-emerald-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-3 mb-2 text-emerald-600">
+                            <div className="p-2 bg-emerald-100 rounded-lg">
+                                <DollarSign size={18} />
+                            </div>
+                            <span className="font-bold text-xs uppercase tracking-wider text-emerald-700/60">Bankroll</span>
+                        </div>
+                        <div className="text-2xl font-black text-slate-800">
+                            ${(agentData.currency || 0).toLocaleString()}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="relative bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                    <div className="absolute -right-6 -bottom-6 bg-blue-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all"></div>
+                    <button 
+                        onClick={triggerSelfDestruct}
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-20 hover:!opacity-100 transition-opacity text-red-500"
+                        title="DO NOT PRESS"
+                    >
+                        <Bomb size={16} />
+                    </button>
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-3 mb-2 text-blue-600">
+                            <div className="p-2 bg-blue-100 rounded-lg">
+                        <Target size={18} />
+                    </div>
+                    <span className="font-bold text-xs uppercase tracking-wider text-blue-700/60">Mission Log</span>
+                </div>
+                        <div className="text-2xl font-black text-slate-800">
+                            {agentData.completed_jobs || 0}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="relative bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                    <div className="absolute -right-6 -bottom-6 bg-amber-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all"></div>
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-3 mb-2 text-amber-600">
+                            <div className="p-2 bg-amber-100 rounded-lg">
+                                <Medal size={18} />
+                            </div>
+                            <span className="font-bold text-xs uppercase tracking-wider text-amber-700/60">Honors</span>
+                        </div>
+                        <div className="text-2xl font-black text-slate-800">
+                            {Object.keys(agentData.badges || {}).length}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-6 -mt-10">
-        
-        {/* --- UPGRADED STATS ROW --- */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            
-            {/* 1. CASH CARD (Emerald Theme) */}
-            <div className="relative bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
-                {/* Background Glow */}
-                <div className="absolute -right-6 -bottom-6 bg-emerald-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
-                
-                <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-2 text-emerald-600">
-                        <div className="p-2 bg-emerald-100 rounded-lg">
-                            <DollarSign size={20} />
-                        </div>
-                        <span className="font-bold text-xs uppercase tracking-wider text-emerald-700/60">Bankroll</span>
-                    </div>
-                    <div className="text-3xl font-black text-slate-800">
-                        ${(agentData.currency || 0).toLocaleString()}
-                    </div>
-                </div>
-            </div>
-
-            {/* 2. MISSIONS CARD (Blue Theme) */}
-            <div className="relative bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
-                {/* Background Glow */}
-                <div className="absolute -right-6 -bottom-6 bg-blue-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all"></div>
-                    {/* --- SECRET BUTTON --- */}
-                <button 
-                    onClick={triggerSelfDestruct}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-20 hover:!opacity-100 transition-opacity text-red-500"
-                    title="DO NOT PRESS"
-                >
-                    <Bomb size={16} />
-                </button>
-                {/* --------------------- */}
-                <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-2 text-blue-600">
-                        <div className="p-2 bg-blue-100 rounded-lg">
-                            <Target size={20} />
-                        </div>
-                        <span className="font-bold text-xs uppercase tracking-wider text-blue-700/60">Mission Log</span>
-                    </div>
-                    <div className="text-3xl font-black text-slate-800">
-                        {agentData.completed_jobs || 0}
-                    </div>
-                </div>
-            </div>
-
-            {/* 3. MEDALS CARD (Amber Theme) */}
-            <div className="relative bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
-                {/* Background Glow */}
-                <div className="absolute -right-6 -bottom-6 bg-amber-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all"></div>
-
-                <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-2 text-amber-600">
-                        <div className="p-2 bg-amber-100 rounded-lg">
-                            <Medal size={20} />
-                        </div>
-                        <span className="font-bold text-xs uppercase tracking-wider text-amber-700/60">Honors</span>
-                    </div>
-                    <div className="text-3xl font-black text-slate-800">
-                        {Object.keys(agentData.badges || {}).length}
-                    </div>
-                </div>
-            </div>
-
-        </div>
-
+      <div className="max-w-6xl mx-auto px-6 mt-8">
         {/* MEDALS / BADGES SECTION */}
         <div className="mb-12">
            <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">

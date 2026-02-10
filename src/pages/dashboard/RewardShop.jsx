@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { db } from "../../lib/firebase";
 import { 
@@ -38,7 +38,8 @@ const ICON_MAP = {
     "trash-2": <Trash2 size={24} className="text-red-400" />,
     "lock": <Lock size={24} className="text-slate-400" />,
     "user-check": <UserCheck size={24} className="text-green-500" />,
-    "percent": <Percent size={24} className="text-purple-500" />
+    "percent": <Percent size={24} className="text-purple-500" />,
+    "dollar-sign": <DollarSign size={24} className="text-emerald-500" />
 };
 
 export default function RewardShop() {
@@ -50,6 +51,14 @@ export default function RewardShop() {
   const [purchasing, setPurchasing] = useState(null);
   const { theme } = useTheme();
   const labels = theme.labels;
+
+  const shopItemById = useMemo(() => {
+    const map = {};
+    shopItems.forEach(item => {
+      map[item.id] = item;
+    });
+    return map;
+  }, [shopItems]);
 
   const resolveExpiryDate = (rawExpiry) => {
     if (!rawExpiry) return null;
@@ -129,19 +138,22 @@ export default function RewardShop() {
       }
 
       const isXpBoost = item.effectType === "xp_boost";
-      const boostPercent = Number(item.xpBoostPercent) || 10;
-      const boostDays = Number(item.xpBoostDays) || 14;
-      const currentExpiry = resolveExpiryDate(userData?.xpBoostExpiresAt);
+      const isCashBoost = item.effectType === "currency_boost";
+      const boostPercent = isXpBoost ? Number(item.xpBoostPercent) || 10 : Number(item.currencyBoostPercent) || 10;
+      const boostDays = isXpBoost ? Number(item.xpBoostDays) || 14 : Number(item.currencyBoostDays) || 14;
+      const currentExpiry = resolveExpiryDate(
+          isXpBoost ? userData?.xpBoostExpiresAt : userData?.currencyBoostExpiresAt
+      );
       const now = new Date();
       const hasActiveBoost = currentExpiry && currentExpiry > now;
 
       // No stacking: block purchase if boost already active
-      if (isXpBoost && hasActiveBoost) {
-          alert(`XP Boost already active until ${currentExpiry.toLocaleDateString()}.`);
+      if ((isXpBoost || isCashBoost) && hasActiveBoost) {
+          alert(`${isCashBoost ? `${labels.currency} Boost` : "XP Boost"} already active until ${currentExpiry.toLocaleDateString()}.`);
           return;
       }
 
-      const nextBoostExpiry = isXpBoost
+      const nextBoostExpiry = (isXpBoost || isCashBoost)
           ? new Date(now.getTime() + boostDays * 24 * 60 * 60 * 1000)
           : null;
 
@@ -158,7 +170,12 @@ export default function RewardShop() {
                   itemId: item.id,
                   name: item.title,
                   purchaseDate: new Date().toISOString(),
-                  redeemed: false
+                  redeemed: false,
+                  effectType: item.effectType || "none",
+                  xpBoostPercent: item.xpBoostPercent || null,
+                  xpBoostDays: item.xpBoostDays || null,
+                  currencyBoostPercent: item.currencyBoostPercent || null,
+                  currencyBoostDays: item.currencyBoostDays || null
               })
           };
 
@@ -167,6 +184,12 @@ export default function RewardShop() {
               updates.xpBoostPercent = boostPercent;
               updates.xpBoostNotifiedSoon = false;
               updates.xpBoostNotifiedExpired = false;
+          }
+          if (isCashBoost && nextBoostExpiry) {
+              updates.currencyBoostExpiresAt = Timestamp.fromDate(nextBoostExpiry);
+              updates.currencyBoostPercent = boostPercent;
+              updates.currencyBoostNotifiedSoon = false;
+              updates.currencyBoostNotifiedExpired = false;
           }
 
           await updateDoc(userRef, updates);
@@ -178,8 +201,8 @@ export default function RewardShop() {
           });
 
           // 3. Add Alert
-          const boostMessage = isXpBoost
-              ? ` XP Boost active until ${nextBoostExpiry.toLocaleDateString()}.`
+          const boostMessage = (isXpBoost || isCashBoost)
+              ? ` Boost active until ${nextBoostExpiry.toLocaleDateString()}.`
               : "";
           await addDoc(collection(db, "users", user.uid, "alerts"), {
               type: "success",
@@ -250,9 +273,12 @@ export default function RewardShop() {
                 const canAfford = (userData?.currency || 0) >= item.price;
                 const outOfStock = item.stock <= 0;
                 const isXpBoost = item.effectType === "xp_boost";
-                const currentExpiry = resolveExpiryDate(userData?.xpBoostExpiresAt);
+                const isCashBoost = item.effectType === "currency_boost";
+                const currentExpiry = resolveExpiryDate(
+                    isXpBoost ? userData?.xpBoostExpiresAt : userData?.currencyBoostExpiresAt
+                );
                 const hasActiveBoost = currentExpiry && currentExpiry > new Date();
-                const boostBlocked = isXpBoost && hasActiveBoost;
+                const boostBlocked = (isXpBoost || isCashBoost) && hasActiveBoost;
                 // Check if this specific item is on sale
                 const isOnSale = item.original_price && item.original_price > item.price;
 
@@ -290,6 +316,11 @@ export default function RewardShop() {
                                     +{Number(item.xpBoostPercent || 10)}% XP for {Number(item.xpBoostDays || 14)} days
                                 </p>
                             )}
+                            {item.effectType === "currency_boost" && (
+                                <p className="text-xs font-bold text-emerald-600 mt-2">
+                                    +{Number(item.currencyBoostPercent || 10)}% {labels.currency} for {Number(item.currencyBoostDays || 14)} days
+                                </p>
+                            )}
                             
                             {/* STOCK COUNTER */}
                         {!outOfStock && (
@@ -299,7 +330,7 @@ export default function RewardShop() {
                         )}
                         {boostBlocked && (
                             <p className="text-xs font-bold text-amber-600 mt-2">
-                                XP Boost active until {currentExpiry.toLocaleDateString()}
+                                Boost active until {currentExpiry.toLocaleDateString()}
                             </p>
                         )}
                     </div>
@@ -348,33 +379,59 @@ export default function RewardShop() {
         </div>
 
         {/* INVENTORY SECTION */}
-        <div className="border-t border-slate-200 pt-8">
-            <h2 className="text-xl font-bold theme-text mb-6 flex items-center gap-2">
-                <Briefcase className="text-slate-400" /> Your Inventory
-            </h2>
-            {inventory.length === 0 ? (
+      <div className="border-t border-slate-200 pt-8">
+          <h2 className="text-xl font-bold theme-text mb-6 flex items-center gap-2">
+              <Briefcase className="text-slate-400" /> Your Inventory
+          </h2>
+          {inventory.length === 0 ? (
                 <div className="text-center py-10 theme-card rounded-xl border border-dashed theme-border theme-muted">
                     <Ghost size={48} className="mx-auto mb-2 opacity-20" />
                     You haven't bought anything yet. Go shopping!
                 </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {inventory.map((item, index) => (
-                        <div key={index} className="theme-surface p-4 rounded-xl border theme-border flex items-center justify-between shadow-sm">
-                            <div>
-                                <span className="font-bold theme-text block text-sm">{item.name}</span>
-                                <span className="text-[10px] font-bold theme-muted uppercase">
-                                    {new Date(item.purchaseDate).toLocaleDateString()}
-                                </span>
-                            </div>
-                            <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-1 rounded font-bold">
-                                UNUSED
+          ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {inventory.map((item, index) => (
+                      (() => {
+                          const shopItem = shopItemById[item.itemId];
+                          const inferredType =
+                              item.effectType ||
+                              shopItem?.effectType ||
+                              (item.xpBoostPercent ?? shopItem?.xpBoostPercent ? "xp_boost" : item.currencyBoostPercent ?? shopItem?.currencyBoostPercent ? "currency_boost" : "none");
+                          const isXpBoost = inferredType === "xp_boost";
+                          const isCashBoost = inferredType === "currency_boost";
+                          const boostExpiry = resolveExpiryDate(
+                              isXpBoost ? userData?.xpBoostExpiresAt : userData?.currencyBoostExpiresAt
+                          );
+                          const boostActive = boostExpiry && boostExpiry > new Date();
+                          const isBoostItem = isXpBoost || isCashBoost;
+                          const statusLabel = isBoostItem
+                              ? (boostActive ? "ACTIVE" : "EXPIRED")
+                              : "UNUSED";
+                          const statusClasses = isBoostItem
+                              ? (boostActive
+                                  ? isCashBoost
+                                      ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                      : "bg-purple-100 text-purple-700 border border-purple-200"
+                                  : "bg-slate-100 text-slate-500 border border-slate-200")
+                              : "bg-emerald-50 text-emerald-600 border border-emerald-100";
+                          return (
+                    <div key={index} className="theme-surface p-4 rounded-xl border theme-border flex items-center justify-between shadow-sm">
+                        <div>
+                            <span className="font-bold theme-text block text-sm">{item.name}</span>
+                            <span className="text-[10px] font-bold theme-muted uppercase">
+                                {new Date(item.purchaseDate).toLocaleDateString()}
                             </span>
                         </div>
-                    ))}
-                </div>
-            )}
-        </div>
+                        <span className={`text-[10px] px-2 py-1 rounded font-bold ${statusClasses}`}>
+                            {statusLabel}
+                        </span>
+                    </div>
+                          );
+                      })()
+                  ))}
+              </div>
+          )}
+      </div>
       </div>
     </div>
   );

@@ -95,6 +95,16 @@ export default function AdminRoster() {
     return Math.ceil(Number(baseXp || 0) * (1 + boostPercent / 100));
   };
 
+  const getBoostedCurrency = (baseCash, userData) => {
+    const rawExpiry = userData?.currencyBoostExpiresAt;
+    if (!rawExpiry) return baseCash;
+    const expiryDate = rawExpiry?.toDate ? rawExpiry.toDate() : new Date(rawExpiry);
+    if (!expiryDate || Number.isNaN(expiryDate.getTime())) return baseCash;
+    if (expiryDate <= new Date()) return baseCash;
+    const boostPercent = Number(userData?.currencyBoostPercent) || 10;
+    return Math.ceil(Number(baseCash || 0) * (1 + boostPercent / 100));
+  };
+
   // 1. Manual Bonus
   const handleBonusSubmit = async (e) => {
     e.preventDefault();
@@ -108,14 +118,15 @@ export default function AdminRoster() {
         const userSnap = await getDoc(userRef);
         const userData = userSnap.exists() ? userSnap.data() : {};
         const boostedXp = getBoostedXp(xpAmount, userData);
+        const boostedCash = getBoostedCurrency(currencyAmount, userData);
 
         await updateDoc(userRef, {
-            currency: increment(currencyAmount),
+            currency: increment(boostedCash),
             xp: increment(boostedXp)
         });
         
         setBonusForm({ currency: 0, xp: 0 });
-        alert(`Stats updated: $${currencyAmount} / ${boostedXp} ${labels.xp}`);
+        alert(`Stats updated: $${boostedCash} / ${boostedXp} ${labels.xp}`);
     } catch (error) {
         console.error("Error giving bonus:", error);
         alert("Failed to update stats.");
@@ -138,6 +149,7 @@ export default function AdminRoster() {
           const baseXp = Number(badge.xpReward || 0);
           const boostedXp = getBoostedXp(baseXp, userData);
           const cashReward = Number(badge.currencyReward || 0);
+          const boostedCash = getBoostedCurrency(cashReward, userData);
           
           // Use Dot Notation to update the Map (not an array push)
           await updateDoc(userRef, {
@@ -146,11 +158,11 @@ export default function AdminRoster() {
                   title: badge.title
               },
               xp: increment(boostedXp),
-              currency: increment(cashReward)
+              currency: increment(boostedCash)
           });
 
           setSelectedBadgeId(""); 
-          alert(`Awarded "${badge.title}" +${boostedXp} ${labels.xp} and $${cashReward}!`);
+          alert(`Awarded "${badge.title}" +${boostedXp} ${labels.xp} and $${boostedCash}!`);
       } catch (error) {
           console.error("Error awarding badge:", error);
           alert("Failed to award badge.");

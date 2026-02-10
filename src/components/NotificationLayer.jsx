@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "../context/AuthContext";
 import { BADGES } from "../lib/gameConfig";
-import { Sparkles, Trophy, CheckCircle, Briefcase, X, Zap } from "lucide-react"; // <--- Added Zap
+import { Sparkles, Trophy, CheckCircle, Briefcase, X, Zap, DollarSign } from "lucide-react";
 
 // Optional: npm install canvas-confetti
 import confetti from "canvas-confetti"; 
@@ -141,6 +141,52 @@ export default function NotificationLayer() {
                         icon: <Zap size={28} />,
                         color: "bg-slate-900",
                         type: "xpboost"
+                    });
+                }
+            }
+        }
+
+        // D. CURRENCY BOOST EXPIRY NOTIFICATIONS
+        const rawCashExpiry = data.currencyBoostExpiresAt;
+        if (rawCashExpiry) {
+            const cashExpiry = rawCashExpiry?.toDate ? rawCashExpiry.toDate() : new Date(rawCashExpiry);
+            if (!Number.isNaN(cashExpiry.getTime())) {
+                const now = new Date();
+                const msLeft = cashExpiry.getTime() - now.getTime();
+                const oneDayMs = 24 * 60 * 60 * 1000;
+                const boostPercent = Number(data.currencyBoostPercent) || 10;
+
+                if (msLeft > 0 && msLeft <= oneDayMs && !data.currencyBoostNotifiedSoon) {
+                    addDoc(collection(db, "users", user.uid, "alerts"), {
+                        type: "warning",
+                        message: `Currency Boost expires tomorrow. (+${boostPercent}% earnings)`,
+                        read: false,
+                        createdAt: serverTimestamp()
+                    });
+                    updateDoc(doc(db, "users", user.uid), { currencyBoostNotifiedSoon: true });
+                    triggerPopup({
+                        title: "Currency Boost Expiring",
+                        message: `Boost ends tomorrow (+${boostPercent}% earnings).`,
+                        icon: <DollarSign size={28} />,
+                        color: "bg-emerald-600",
+                        type: "cashboost"
+                    });
+                }
+
+                if (msLeft <= 0 && !data.currencyBoostNotifiedExpired) {
+                    addDoc(collection(db, "users", user.uid, "alerts"), {
+                        type: "info",
+                        message: "Currency Boost expired.",
+                        read: false,
+                        createdAt: serverTimestamp()
+                    });
+                    updateDoc(doc(db, "users", user.uid), { currencyBoostNotifiedExpired: true });
+                    triggerPopup({
+                        title: "Currency Boost Ended",
+                        message: "Your Currency Boost has expired.",
+                        icon: <DollarSign size={28} />,
+                        color: "bg-slate-900",
+                        type: "cashboost"
                     });
                 }
             }

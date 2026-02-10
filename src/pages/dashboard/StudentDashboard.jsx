@@ -39,6 +39,7 @@ export default function StudentDashboard() {
   const labels = theme.labels;
   const [classThemeId, setClassThemeId] = useState("agency");
   const [isSavingTheme, setIsSavingTheme] = useState(false);
+  const [liveUserData, setLiveUserData] = useState(null);
   
   const [contracts, setContracts] = useState([]);
   const [activeJobs, setActiveJobs] = useState({}); 
@@ -59,10 +60,14 @@ export default function StudentDashboard() {
 
  // --- STATE FOR CLASSES (New) ---
   const [allowedClasses, setAllowedClasses] = useState([]);
-  const boostExpiryRaw = userData?.xpBoostExpiresAt;
+  const boostExpiryRaw = liveUserData?.xpBoostExpiresAt;
   const boostExpiryDate = boostExpiryRaw?.toDate ? boostExpiryRaw.toDate() : boostExpiryRaw ? new Date(boostExpiryRaw) : null;
   const boostActive = boostExpiryDate && boostExpiryDate > new Date();
-  const boostPercent = Number(userData?.xpBoostPercent) || 10;
+  const boostPercent = Number(liveUserData?.xpBoostPercent) || 10;
+  const cashBoostExpiryRaw = liveUserData?.currencyBoostExpiresAt;
+  const cashBoostExpiryDate = cashBoostExpiryRaw?.toDate ? cashBoostExpiryRaw.toDate() : cashBoostExpiryRaw ? new Date(cashBoostExpiryRaw) : null;
+  const cashBoostActive = cashBoostExpiryDate && cashBoostExpiryDate > new Date();
+  const cashBoostPercent = Number(liveUserData?.currencyBoostPercent) || 10;
 
   // 1. LIVE LISTENER: User Profile (XP, Money, AND Classes)
   useEffect(() => {
@@ -73,6 +78,7 @@ export default function StudentDashboard() {
         (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
+                setLiveUserData(data);
                 
                 // A. Update Stats
                 setStats({
@@ -97,9 +103,9 @@ export default function StudentDashboard() {
   }, [user]);
 
   useEffect(() => {
-    if (!userData?.class_id) return;
+    if (!liveUserData?.class_id) return;
     const unsub = onSnapshot(
-      doc(db, "classes", userData.class_id),
+      doc(db, "classes", liveUserData.class_id),
       (snap) => {
         if (!snap.exists()) return;
         setClassThemeId(snap.data()?.theme_id || "agency");
@@ -109,7 +115,7 @@ export default function StudentDashboard() {
       }
     );
     return () => unsub();
-  }, [userData?.class_id]);
+  }, [liveUserData?.class_id]);
 
   // 2. CHECK FOR DAILY MISSIONS (The Intercept)
   useEffect(() => {
@@ -265,16 +271,23 @@ export default function StudentDashboard() {
       try {
           // 2. Reward the Student
           const userRef = doc(db, "users", user.uid);
-          const rawExpiry = userData?.xpBoostExpiresAt;
+          const rawExpiry = liveUserData?.xpBoostExpiresAt;
           const expiryDate = rawExpiry?.toDate ? rawExpiry.toDate() : rawExpiry ? new Date(rawExpiry) : null;
           const boostActive = expiryDate && expiryDate > new Date();
-          const boostPercent = Number(userData?.xpBoostPercent) || 10;
+          const boostPercent = Number(liveUserData?.xpBoostPercent) || 10;
           const boostedXp = boostActive
               ? Math.ceil(Number(dailyMission.reward_xp || 0) * (1 + boostPercent / 100))
               : Number(dailyMission.reward_xp || 0);
+          const rawCashExpiry = liveUserData?.currencyBoostExpiresAt;
+          const cashExpiry = rawCashExpiry?.toDate ? rawCashExpiry.toDate() : rawCashExpiry ? new Date(rawCashExpiry) : null;
+          const cashBoostActive = cashExpiry && cashExpiry > new Date();
+          const cashBoostPercent = Number(liveUserData?.currencyBoostPercent) || 10;
+          const boostedCash = cashBoostActive
+              ? Math.ceil(Number(dailyMission.reward_cash || 0) * (1 + cashBoostPercent / 100))
+              : Number(dailyMission.reward_cash || 0);
 
           await updateDoc(userRef, {
-              currency: increment(dailyMission.reward_cash),
+              currency: increment(boostedCash),
               xp: increment(boostedXp),
               completed_missions: arrayUnion(dailyMission.id) // Mark done so popup never comes back
           });
@@ -282,7 +295,7 @@ export default function StudentDashboard() {
           // 3. Success Animation
           setShowMissionModal(false);
           setMissionCode("");
-          alert(`MISSION COMPLETE.\n+${boostedXp} XP\n+$${dailyMission.reward_cash}`);
+          alert(`MISSION COMPLETE.\n+${boostedXp} XP\n+$${boostedCash}`);
           
       } catch (err) {
           console.error("Error claiming mission:", err);
@@ -339,13 +352,20 @@ export default function StudentDashboard() {
                 Welcome back, {user?.displayName?.split(' ')[0]}.
             </h1>
             <p className="theme-muted">
-                Class Clearance: <span className="font-bold theme-accent uppercase">{userData?.class_id || "Unassigned"}</span>
+                Class Clearance: <span className="font-bold theme-accent uppercase">{liveUserData?.class_id || "Unassigned"}</span>
             </p>
-            {boostActive && (
-                <div className="inline-flex items-center gap-2 mt-3 px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-bold">
-                    <Zap size={12} /> XP Boost +{boostPercent}% • Expires {boostExpiryDate.toLocaleDateString()}
-                </div>
-            )}
+            <div className="flex flex-wrap gap-2 mt-3">
+                {boostActive && (
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-bold">
+                        <Zap size={12} /> XP Boost +{boostPercent}% • Expires {boostExpiryDate.toLocaleDateString()}
+                    </div>
+                )}
+                {cashBoostActive && (
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
+                        <DollarSign size={12} /> {labels.currency} Boost +{cashBoostPercent}% • Expires {cashBoostExpiryDate.toLocaleDateString()}
+                    </div>
+                )}
+            </div>
         </div>
 
         {/* --- STATS GRID --- */}

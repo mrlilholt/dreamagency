@@ -44,6 +44,7 @@ import {
 import AdminShell from "../../components/AdminShell";
 import { CLASS_CODES } from "../../lib/gameConfig";
 import { THEME_OPTIONS } from "../../lib/themeConfig";
+import { useTheme } from "../../context/ThemeContext";
 // --- ICON LIST (For Shop) ---
 const AVAILABLE_ICONS = [
     "life-buoy", "map-pin", "briefcase", "pen-tool", "clock", 
@@ -83,6 +84,8 @@ const formatSideHustleStatus = (status, scheduledDate) => {
 };
 
 export default function AdminDashboard() {
+  const { theme } = useTheme();
+  const labels = theme?.labels || { currency: "Currency", xp: "XP", assignments: "Assignments" };
   // --- STATE ---
   const [submissions, setSubmissions] = useState([]);
   const [stats, setStats] = useState({ activeCount: 0, agentCount: 0 });
@@ -111,7 +114,9 @@ export default function AdminDashboard() {
       iconName: "briefcase",
       effectType: "none",
       xpBoostPercent: 10,
-      xpBoostDays: 14
+      xpBoostDays: 14,
+      currencyBoostPercent: 10,
+      currencyBoostDays: 14
   });
 
   // --- NEW: SUGGESTION BOX STATE ---
@@ -649,6 +654,16 @@ const [missions, setMissions] = useState([]);
       return Math.ceil(Number(baseXp || 0) * (1 + boostPercent / 100));
   };
 
+  const getBoostedCurrency = (baseCash, userData) => {
+      const rawExpiry = userData?.currencyBoostExpiresAt;
+      if (!rawExpiry) return baseCash;
+      const expiryDate = rawExpiry?.toDate ? rawExpiry.toDate() : new Date(rawExpiry);
+      if (!expiryDate || Number.isNaN(expiryDate.getTime())) return baseCash;
+      if (expiryDate <= new Date()) return baseCash;
+      const boostPercent = Number(userData?.currencyBoostPercent) || 10;
+      return Math.ceil(Number(baseCash || 0) * (1 + boostPercent / 100));
+  };
+
   // --- APPROVAL ACTIONS ---
   const approveSubmission = async (job) => {
       try {
@@ -664,8 +679,9 @@ const [missions, setMissions] = useState([]);
           const userSnap = await getDoc(userRef);
           const userData = userSnap.exists() ? userSnap.data() : {};
           const xpAmount = getBoostedXp(baseXp, userData);
+          const cashAmount = getBoostedCurrency(payAmount, userData);
 
-          console.log(`Approving Stage ${currentStage}. Paying: $${payAmount} & ${xpAmount}XP`);
+          console.log(`Approving Stage ${currentStage}. Paying: $${cashAmount} & ${xpAmount}XP`);
 
           const updates = {};
           
@@ -675,7 +691,7 @@ const [missions, setMissions] = useState([]);
 
           // B. PAY THE STUDENT (Happens every time now)
           await updateDoc(userRef, {
-              currency: increment(payAmount), 
+              currency: increment(cashAmount), 
               xp: increment(xpAmount),        
               completed_jobs: increment(1) // Optional: counts stages as "jobs" done
           });
@@ -688,7 +704,7 @@ const [missions, setMissions] = useState([]);
 
               await addDoc(collection(db, "users", job.student_id, "alerts"), {
                   type: "success",
-                  message: `Mission "${job.contract_title}" COMPLETED! Final Payment: $${payAmount} and +${xpAmount} XP.`,
+                  message: `Mission "${job.contract_title}" COMPLETED! Final Payment: $${cashAmount} and +${xpAmount} XP.`,
                   read: false,
                   createdAt: serverTimestamp()
               });
@@ -705,7 +721,7 @@ const [missions, setMissions] = useState([]);
               
               await addDoc(collection(db, "users", job.student_id, "alerts"), {
                   type: "success",
-                  message: `Stage ${currentStage} approved! You earned $${payAmount} and +${xpAmount} XP. Proceed to Stage ${nextStage}.`,
+                  message: `Stage ${currentStage} approved! You earned $${cashAmount} and +${xpAmount} XP. Proceed to Stage ${nextStage}.`,
                   read: false,
                   createdAt: serverTimestamp()
               });
@@ -734,9 +750,10 @@ const [missions, setMissions] = useState([]);
           const userSnap = await getDoc(userRef);
           const userData = userSnap.exists() ? userSnap.data() : {};
           const xpAmount = getBoostedXp(baseXp, userData);
+          const cashAmount = getBoostedCurrency(payAmount, userData);
 
           await updateDoc(userRef, {
-              currency: increment(Number(payAmount) || 0),
+              currency: increment(Number(cashAmount) || 0),
               xp: increment(Number(xpAmount) || 0)
           });
 
@@ -750,7 +767,7 @@ const [missions, setMissions] = useState([]);
 
           await addDoc(collection(db, "users", job.student_id, "alerts"), {
               type: "success",
-              message: `Side Hustle "${hustle?.title || job.side_hustle_title}" approved! +$${payAmount} and +${xpAmount} XP.`,
+              message: `Side Hustle "${hustle?.title || job.side_hustle_title}" approved! +$${cashAmount} and +${xpAmount} XP.`,
               read: false,
               createdAt: serverTimestamp()
           });
@@ -819,6 +836,8 @@ const [missions, setMissions] = useState([]);
               stock: Number(shopForm.stock) || 0,
               xpBoostPercent: shopForm.effectType === "xp_boost" ? Number(shopForm.xpBoostPercent) || 10 : null,
               xpBoostDays: shopForm.effectType === "xp_boost" ? Number(shopForm.xpBoostDays) || 14 : null,
+              currencyBoostPercent: shopForm.effectType === "currency_boost" ? Number(shopForm.currencyBoostPercent) || 10 : null,
+              currencyBoostDays: shopForm.effectType === "currency_boost" ? Number(shopForm.currencyBoostDays) || 14 : null,
               effectType: shopForm.effectType || "none"
           };
 
@@ -850,7 +869,9 @@ const [missions, setMissions] = useState([]);
           iconName: item.iconName,
           effectType: item.effectType || "none",
           xpBoostPercent: item.xpBoostPercent || 10,
-          xpBoostDays: item.xpBoostDays || 14
+          xpBoostDays: item.xpBoostDays || 14,
+          currencyBoostPercent: item.currencyBoostPercent || 10,
+          currencyBoostDays: item.currencyBoostDays || 14
       });
       setIsShopFormOpen(true);
   };
@@ -866,7 +887,9 @@ const [missions, setMissions] = useState([]);
           iconName: "briefcase",
           effectType: "none",
           xpBoostPercent: 10,
-          xpBoostDays: 14
+          xpBoostDays: 14,
+          currencyBoostPercent: 10,
+          currencyBoostDays: 14
       });
   };
 
@@ -1498,6 +1521,7 @@ const [missions, setMissions] = useState([]);
                                 >
                                     <option value="none">Standard item</option>
                                     <option value="xp_boost">XP Multiplier</option>
+                                    <option value="currency_boost">{labels.currency} Multiplier</option>
                                 </select>
                             </div>
 
@@ -1519,6 +1543,28 @@ const [missions, setMissions] = useState([]);
                                             className="w-full p-2 border rounded mt-1 text-sm"
                                             value={shopForm.xpBoostDays}
                                             onChange={e => setShopForm({...shopForm, xpBoostDays: parseInt(e.target.value)})}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                            {shopForm.effectType === "currency_boost" && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500">Boost %</label>
+                                        <input
+                                            type="number"
+                                            className="w-full p-2 border rounded mt-1 text-sm"
+                                            value={shopForm.currencyBoostPercent}
+                                            onChange={e => setShopForm({...shopForm, currencyBoostPercent: parseInt(e.target.value)})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500">Duration (days)</label>
+                                        <input
+                                            type="number"
+                                            className="w-full p-2 border rounded mt-1 text-sm"
+                                            value={shopForm.currencyBoostDays}
+                                            onChange={e => setShopForm({...shopForm, currencyBoostDays: parseInt(e.target.value)})}
                                         />
                                     </div>
                                 </div>
