@@ -3,7 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import { db } from "../../lib/firebase";
 import { 
     doc, onSnapshot, updateDoc, arrayUnion, 
-    increment, collection, addDoc, serverTimestamp 
+    increment, collection, addDoc, serverTimestamp, Timestamp
 } from "firebase/firestore"; 
 import { 
     ShoppingBag, Search, Filter, Lock, 
@@ -37,7 +37,8 @@ const ICON_MAP = {
     "mic": <Mic size={24} className="text-sky-500" />,
     "trash-2": <Trash2 size={24} className="text-red-400" />,
     "lock": <Lock size={24} className="text-slate-400" />,
-    "user-check": <UserCheck size={24} className="text-green-500" />
+    "user-check": <UserCheck size={24} className="text-green-500" />,
+    "percent": <Percent size={24} className="text-purple-500" />
 };
 
 export default function RewardShop() {
@@ -49,6 +50,11 @@ export default function RewardShop() {
   const [purchasing, setPurchasing] = useState(null);
   const { theme } = useTheme();
   const labels = theme.labels;
+
+  const resolveExpiryDate = (rawExpiry) => {
+    if (!rawExpiry) return null;
+    return rawExpiry?.toDate ? rawExpiry.toDate() : new Date(rawExpiry);
+  };
 
   // --- LISTENERS ---
   useEffect(() => {
@@ -122,6 +128,23 @@ export default function RewardShop() {
           return;
       }
 
+      const isXpBoost = item.effectType === "xp_boost";
+      const boostPercent = Number(item.xpBoostPercent) || 10;
+      const boostDays = Number(item.xpBoostDays) || 14;
+      const currentExpiry = resolveExpiryDate(userData?.xpBoostExpiresAt);
+      const now = new Date();
+      const hasActiveBoost = currentExpiry && currentExpiry > now;
+
+      // No stacking: block purchase if boost already active
+      if (isXpBoost && hasActiveBoost) {
+          alert(`XP Boost already active until ${currentExpiry.toLocaleDateString()}.`);
+          return;
+      }
+
+      const nextBoostExpiry = isXpBoost
+          ? new Date(now.getTime() + boostDays * 24 * 60 * 60 * 1000)
+          : null;
+
       if(!confirm(`Purchase "${item.title}" for $${item.price}?`)) return;
 
       setPurchasing(item.id);
@@ -129,7 +152,7 @@ export default function RewardShop() {
       try {
           // 1. Deduct Money & Add to Inventory
           const userRef = doc(db, "users", user.uid);
-          await updateDoc(userRef, {
+          const updates = {
               currency: increment(-item.price),
               inventory: arrayUnion({
                   itemId: item.id,
@@ -137,7 +160,16 @@ export default function RewardShop() {
                   purchaseDate: new Date().toISOString(),
                   redeemed: false
               })
-          });
+          };
+
+          if (isXpBoost && nextBoostExpiry) {
+              updates.xpBoostExpiresAt = Timestamp.fromDate(nextBoostExpiry);
+              updates.xpBoostPercent = boostPercent;
+              updates.xpBoostNotifiedSoon = false;
+              updates.xpBoostNotifiedExpired = false;
+          }
+
+          await updateDoc(userRef, updates);
 
           // 2. Decrement Stock
           const itemRef = doc(db, "shop_items", item.id);
@@ -146,9 +178,12 @@ export default function RewardShop() {
           });
 
           // 3. Add Alert
+          const boostMessage = isXpBoost
+              ? ` XP Boost active until ${nextBoostExpiry.toLocaleDateString()}.`
+              : "";
           await addDoc(collection(db, "users", user.uid, "alerts"), {
               type: "success",
-              message: `Purchased ${item.title}! Check your inventory.`,
+              message: `Purchased ${item.title}! Check your inventory.${boostMessage}`,
               read: false,
               createdAt: serverTimestamp()
           });
@@ -214,6 +249,10 @@ export default function RewardShop() {
             {shopItems.map(item => {
                 const canAfford = (userData?.currency || 0) >= item.price;
                 const outOfStock = item.stock <= 0;
+                const isXpBoost = item.effectType === "xp_boost";
+                const currentExpiry = resolveExpiryDate(userData?.xpBoostExpiresAt);
+                const hasActiveBoost = currentExpiry && currentExpiry > new Date();
+                const boostBlocked = isXpBoost && hasActiveBoost;
                 // Check if this specific item is on sale
                 const isOnSale = item.original_price && item.original_price > item.price;
 
@@ -246,22 +285,34 @@ export default function RewardShop() {
                             
                             <h3 className="font-bold theme-text text-lg leading-tight mb-1">{item.title}</h3>
                             <p className="text-sm theme-muted leading-snug">{item.desc}</p>
-                            
-                            {/* STOCK COUNTER */}
-                            {!outOfStock && (
-                                <p className="text-xs font-bold text-slate-400 mt-2 flex items-center gap-1">
-                                    <ShoppingBag size={12}/> {item.stock} Remaining
+                            {item.effectType === "xp_boost" && (
+                                <p className="text-xs font-bold text-purple-600 mt-2">
+                                    +{Number(item.xpBoostPercent || 10)}% XP for {Number(item.xpBoostDays || 14)} days
                                 </p>
                             )}
-                        </div>
+                            
+                            {/* STOCK COUNTER */}
+                        {!outOfStock && (
+                            <p className="text-xs font-bold text-slate-400 mt-2 flex items-center gap-1">
+                                <ShoppingBag size={12}/> {item.stock} Remaining
+                            </p>
+                        )}
+                        {boostBlocked && (
+                            <p className="text-xs font-bold text-amber-600 mt-2">
+                                XP Boost active until {currentExpiry.toLocaleDateString()}
+                            </p>
+                        )}
+                    </div>
 
-                        {/* PRICE BUTTON */}
-                        <button
-                            onClick={() => purchaseItem(item)}
-                            disabled={!canAfford || outOfStock || purchasing === item.id}
-                            className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition active:scale-95
+                    {/* PRICE BUTTON */}
+                    <button
+                        onClick={() => purchaseItem(item)}
+                        disabled={!canAfford || outOfStock || purchasing === item.id || boostBlocked}
+                        className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition active:scale-95
                                 ${outOfStock 
                                     ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                    : boostBlocked
+                                        ? "bg-amber-100 text-amber-700 cursor-not-allowed"
                                     : isOnSale 
                                         ? "bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-200" // Red button for sale
                                         : canAfford
@@ -269,14 +320,16 @@ export default function RewardShop() {
                                             : "bg-slate-100 text-slate-400 cursor-not-allowed"
                                 }
                             `}
-                        >
-                            {purchasing === item.id ? (
-                                <span className="animate-pulse">Processing...</span>
-                            ) : isOnSale ? (
-                                // SALE PRICE LAYOUT
-                                <div className="flex items-center gap-3">
-                                    <span className="text-red-200 line-through text-xs font-medium opacity-80">
-                                        ${item.original_price}
+                    >
+                        {purchasing === item.id ? (
+                            <span className="animate-pulse">Processing...</span>
+                        ) : boostBlocked ? (
+                            <span>Boost Active</span>
+                        ) : isOnSale ? (
+                            // SALE PRICE LAYOUT
+                            <div className="flex items-center gap-3">
+                                <span className="text-red-200 line-through text-xs font-medium opacity-80">
+                                    ${item.original_price}
                                     </span>
                                     <span className="flex items-center gap-1 text-lg">
                                         <DollarSign size={16} strokeWidth={3} /> {item.price}

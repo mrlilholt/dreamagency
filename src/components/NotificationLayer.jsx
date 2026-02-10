@@ -6,7 +6,10 @@ import {
     collection, 
     query, 
     where, 
-    deleteDoc  // <--- This was likely missing
+    deleteDoc,
+    addDoc,
+    updateDoc,
+    serverTimestamp
 } from "firebase/firestore";
 import { useAuth } from "../context/AuthContext";
 import { BADGES } from "../lib/gameConfig";
@@ -96,6 +99,52 @@ export default function NotificationLayer() {
             }
         }
         prevXpRef.current = currentXp;
+
+        // C. XP BOOST EXPIRY NOTIFICATIONS
+        const rawExpiry = data.xpBoostExpiresAt;
+        if (rawExpiry) {
+            const expiryDate = rawExpiry?.toDate ? rawExpiry.toDate() : new Date(rawExpiry);
+            if (!Number.isNaN(expiryDate.getTime())) {
+                const now = new Date();
+                const msLeft = expiryDate.getTime() - now.getTime();
+                const oneDayMs = 24 * 60 * 60 * 1000;
+                const boostPercent = Number(data.xpBoostPercent) || 10;
+
+                if (msLeft > 0 && msLeft <= oneDayMs && !data.xpBoostNotifiedSoon) {
+                    addDoc(collection(db, "users", user.uid, "alerts"), {
+                        type: "warning",
+                        message: `XP Boost expires tomorrow. (+${boostPercent}% XP)`,
+                        read: false,
+                        createdAt: serverTimestamp()
+                    });
+                    updateDoc(doc(db, "users", user.uid), { xpBoostNotifiedSoon: true });
+                    triggerPopup({
+                        title: "XP Boost Expiring",
+                        message: `Boost ends tomorrow (+${boostPercent}% XP).`,
+                        icon: <Zap size={28} />,
+                        color: "bg-amber-500",
+                        type: "xpboost"
+                    });
+                }
+
+                if (msLeft <= 0 && !data.xpBoostNotifiedExpired) {
+                    addDoc(collection(db, "users", user.uid, "alerts"), {
+                        type: "info",
+                        message: "XP Boost expired.",
+                        read: false,
+                        createdAt: serverTimestamp()
+                    });
+                    updateDoc(doc(db, "users", user.uid), { xpBoostNotifiedExpired: true });
+                    triggerPopup({
+                        title: "XP Boost Ended",
+                        message: "Your XP Boost has expired.",
+                        icon: <Zap size={28} />,
+                        color: "bg-slate-900",
+                        type: "xpboost"
+                    });
+                }
+            }
+        }
     }, (error) => {
         console.error("NotificationLayer user listener failed:", error);
     });

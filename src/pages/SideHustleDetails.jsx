@@ -126,6 +126,21 @@ export default function SideHustleDetails() {
   const currentRewardCash = currentLevelData?.reward_cash ?? sideHustle.reward_cash ?? 0;
   const currentRewardXp = currentLevelData?.reward_xp ?? sideHustle.reward_xp ?? 0;
   const cardImage = sideHustle.image_url || "/side.png";
+  const status = sideHustle.status || "live";
+  const scheduledDate = sideHustle.scheduled_date || "";
+  const today = new Date();
+  const dropDate = scheduledDate ? new Date(`${scheduledDate}T12:00:00`) : null;
+  const daysUntilDrop = dropDate ? Math.floor((dropDate - today) / (1000 * 60 * 60 * 24)) : null;
+  const isArchived = status === "archived";
+  const isScheduled = status === "scheduled";
+  const isDropWeek = isScheduled && daysUntilDrop !== null && daysUntilDrop >= 0 && daysUntilDrop <= 6;
+  const isDropReady = isScheduled && dropDate && dropDate <= today;
+  const isLive = status === "live" || isDropReady;
+  const statusLabel = isArchived
+      ? "Archived"
+      : isScheduled
+      ? (isDropWeek ? `Dropping on ${dropDate.toLocaleDateString(undefined, { weekday: "long" })}` : "Dropping Soon")
+      : "Live";
 
   return (
     <div className="min-h-screen theme-bg pb-20">
@@ -149,6 +164,11 @@ export default function SideHustleDetails() {
                 <div>
                   <span className="inline-block bg-indigo-500 text-white text-xs font-bold px-2 py-1 rounded mb-3">
                     Side Hustle
+                  </span>
+                  <span className={`inline-block ml-2 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded ${
+                    isLive ? "bg-emerald-500/90 text-white" : isArchived ? "bg-slate-300 text-slate-700" : "bg-amber-300 text-amber-900"
+                  }`}>
+                    {statusLabel}
                   </span>
                   <h1 className="text-3xl font-black mb-2">{sideHustle.title}</h1>
                   <p className="text-sm text-slate-200 max-w-2xl">
@@ -267,13 +287,20 @@ export default function SideHustleDetails() {
               {!job && (
                 <button
                   onClick={startHustle}
+                  disabled={!isLive}
                   className="w-full bg-indigo-600 text-white font-bold py-2 rounded-lg hover:bg-indigo-700 transition"
                 >
                   Activate Side Hustle
                 </button>
               )}
 
-              {job?.status === "pending_review" ? (
+              {!isLive ? (
+                <div className="p-4 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-700">
+                  {isArchived
+                    ? "This side hustle has been archived."
+                    : "This side hustle is not live yet. Check back soon."}
+                </div>
+              ) : job?.status === "pending_review" ? (
                 <div className="p-4 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-700">
                   Submission received. Your next level unlocks after approval.
                 </div>

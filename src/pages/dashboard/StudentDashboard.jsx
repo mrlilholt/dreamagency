@@ -59,6 +59,10 @@ export default function StudentDashboard() {
 
  // --- STATE FOR CLASSES (New) ---
   const [allowedClasses, setAllowedClasses] = useState([]);
+  const boostExpiryRaw = userData?.xpBoostExpiresAt;
+  const boostExpiryDate = boostExpiryRaw?.toDate ? boostExpiryRaw.toDate() : boostExpiryRaw ? new Date(boostExpiryRaw) : null;
+  const boostActive = boostExpiryDate && boostExpiryDate > new Date();
+  const boostPercent = Number(userData?.xpBoostPercent) || 10;
 
   // 1. LIVE LISTENER: User Profile (XP, Money, AND Classes)
   useEffect(() => {
@@ -261,16 +265,24 @@ export default function StudentDashboard() {
       try {
           // 2. Reward the Student
           const userRef = doc(db, "users", user.uid);
+          const rawExpiry = userData?.xpBoostExpiresAt;
+          const expiryDate = rawExpiry?.toDate ? rawExpiry.toDate() : rawExpiry ? new Date(rawExpiry) : null;
+          const boostActive = expiryDate && expiryDate > new Date();
+          const boostPercent = Number(userData?.xpBoostPercent) || 10;
+          const boostedXp = boostActive
+              ? Math.ceil(Number(dailyMission.reward_xp || 0) * (1 + boostPercent / 100))
+              : Number(dailyMission.reward_xp || 0);
+
           await updateDoc(userRef, {
               currency: increment(dailyMission.reward_cash),
-              xp: increment(dailyMission.reward_xp),
+              xp: increment(boostedXp),
               completed_missions: arrayUnion(dailyMission.id) // Mark done so popup never comes back
           });
 
           // 3. Success Animation
           setShowMissionModal(false);
           setMissionCode("");
-          alert(`MISSION COMPLETE.\n+${dailyMission.reward_xp} XP\n+$${dailyMission.reward_cash}`);
+          alert(`MISSION COMPLETE.\n+${boostedXp} XP\n+$${dailyMission.reward_cash}`);
           
       } catch (err) {
           console.error("Error claiming mission:", err);
@@ -295,8 +307,25 @@ export default function StudentDashboard() {
   const progress = ((stats.xp % 1000) / 1000) * 100;
   
   const visibleSideHustles = sideHustles.filter(hustle =>
-    hustle.class_id === "all" || allowedClasses.includes(hustle.class_id)
+    (hustle.class_id === "all" || allowedClasses.includes(hustle.class_id)) &&
+    hustle.status !== "archived"
   );
+
+  const getSideHustleStatusLabel = (status, scheduledDate) => {
+    if (status === "scheduled") {
+      if (!scheduledDate) return "Dropping Soon";
+      const today = new Date();
+      const dropDate = new Date(`${scheduledDate}T12:00:00`);
+      const diffDays = Math.floor((dropDate - today) / (1000 * 60 * 60 * 24));
+      if (dropDate <= today) return "Side Hustle";
+      if (diffDays >= 0 && diffDays <= 6) {
+        return `Dropping on ${dropDate.toLocaleDateString(undefined, { weekday: "long" })}`;
+      }
+      return "Dropping Soon";
+    }
+    if (status === "archived") return "Archived";
+    return "Side Hustle";
+  };
 
   return (
     <div className="min-h-screen theme-bg pb-20">
@@ -312,6 +341,11 @@ export default function StudentDashboard() {
             <p className="theme-muted">
                 Class Clearance: <span className="font-bold theme-accent uppercase">{userData?.class_id || "Unassigned"}</span>
             </p>
+            {boostActive && (
+                <div className="inline-flex items-center gap-2 mt-3 px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-bold">
+                    <Zap size={12} /> XP Boost +{boostPercent}% • Expires {boostExpiryDate.toLocaleDateString()}
+                </div>
+            )}
         </div>
 
         {/* --- STATS GRID --- */}
@@ -385,6 +419,8 @@ export default function StudentDashboard() {
                         const levelCash = levelData?.reward_cash ?? hustle.reward_cash ?? 0;
                         const levelXp = levelData?.reward_xp ?? hustle.reward_xp ?? 0;
                         const cardImage = hustle.image_url || "/side.png";
+                        const status = hustle.status || "live";
+                        const statusLabel = getSideHustleStatusLabel(status, hustle.scheduled_date);
 
                         return (
                             <button
@@ -400,8 +436,10 @@ export default function StudentDashboard() {
 
                                 <div className="relative z-10 h-full p-4 flex flex-col justify-between">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-[10px] uppercase font-bold tracking-wider bg-black/40 text-white px-2 py-1 rounded">
-                                            Side Hustle
+                                        <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded ${
+                                            status === "live" ? "bg-black/40 text-white" : "bg-amber-300 text-amber-900"
+                                        }`}>
+                                            {statusLabel}
                                         </span>
                                         {isPending ? (
                                             <span className="text-[10px] uppercase font-bold tracking-wider bg-yellow-300 text-yellow-900 px-2 py-1 rounded flex items-center gap-1">

@@ -4,6 +4,7 @@ import {
   collection, 
   onSnapshot,
   doc, 
+  getDoc,
   updateDoc, 
   deleteDoc,
   addDoc,
@@ -66,6 +67,20 @@ const getAutoLevelRewards = (levelNumber) => {
         reward_xp: BASE_SIDE_HUSTLE_REWARD.xp * multiplier
     };
 };
+const MAX_SIDE_HUSTLE_IMAGE_BYTES = 350 * 1024;
+const formatSideHustleStatus = (status, scheduledDate) => {
+    if (status === "archived") return "Archived";
+    if (status !== "scheduled") return "Live";
+    if (!scheduledDate) return "Dropping Soon";
+    const today = new Date();
+    const dropDate = new Date(`${scheduledDate}T12:00:00`);
+    if (dropDate <= today) return "Live";
+    const diffDays = Math.floor((dropDate - today) / (1000 * 60 * 60 * 24));
+    if (diffDays >= 0 && diffDays <= 6) {
+        return `Dropping on ${dropDate.toLocaleDateString(undefined, { weekday: "long" })}`;
+    }
+    return "Dropping Soon";
+};
 
 export default function AdminDashboard() {
   // --- STATE ---
@@ -89,7 +104,14 @@ export default function AdminDashboard() {
   const [editingItem, setEditingItem] = useState(null); 
   const [isShopFormOpen, setIsShopFormOpen] = useState(false);
   const [shopForm, setShopForm] = useState({ 
-      title: "", desc: "", price: 0, stock: 0, iconName: "briefcase" 
+      title: "", 
+      desc: "", 
+      price: 0, 
+      stock: 0, 
+      iconName: "briefcase",
+      effectType: "none",
+      xpBoostPercent: 10,
+      xpBoostDays: 14
   });
 
   // --- NEW: SUGGESTION BOX STATE ---
@@ -117,11 +139,14 @@ const [missions, setMissions] = useState([]);
       reward_cash: 50,
       reward_xp: 25,
       class_id: "all",
-      image_url: ""
+      image_url: "",
+      status: "live",
+      scheduled_date: ""
   });
   const [sideHustleLevels, setSideHustleLevels] = useState([
       { title: "Level 1", req: "", ...getAutoLevelRewards(1) }
   ]);
+  const [sideHustleImagePreview, setSideHustleImagePreview] = useState("");
   const [classForm, setClassForm] = useState({
       id: "",
       code: "",
@@ -274,6 +299,9 @@ const [missions, setMissions] = useState([]);
   };
 
   const resetSideHustleForm = () => {
+      if (sideHustleImagePreview?.startsWith("blob:")) {
+          URL.revokeObjectURL(sideHustleImagePreview);
+      }
       setSideHustleForm({
           title: "",
           tagline: "",
@@ -282,10 +310,45 @@ const [missions, setMissions] = useState([]);
           reward_cash: 50,
           reward_xp: 25,
           class_id: "all",
-          image_url: ""
+          image_url: "",
+          status: "live",
+          scheduled_date: ""
       });
       setSideHustleLevels([{ title: "Level 1", req: "", ...getAutoLevelRewards(1) }]);
+      setSideHustleImagePreview("");
       setEditingSideHustleId(null);
+  };
+
+  const setSideHustlePreview = (nextUrl) => {
+      if (sideHustleImagePreview?.startsWith("blob:")) {
+          URL.revokeObjectURL(sideHustleImagePreview);
+      }
+      setSideHustleImagePreview(nextUrl || "");
+  };
+
+  const handleSideHustleImageChange = (event) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+          setSideHustlePreview(sideHustleForm.image_url || "");
+          return;
+      }
+      if (file.size > MAX_SIDE_HUSTLE_IMAGE_BYTES) {
+          alert("Image too large. Please upload a file 350KB or smaller.");
+          event.target.value = "";
+          setSideHustlePreview(sideHustleForm.image_url || "");
+          return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+          const dataUrl = typeof reader.result === "string" ? reader.result : "";
+          if (!dataUrl) return;
+          setSideHustleForm(prev => ({ ...prev, image_url: dataUrl }));
+          setSideHustlePreview(dataUrl);
+      };
+      reader.onerror = () => {
+          alert("Failed to read image file.");
+      };
+      reader.readAsDataURL(file);
   };
 
   const handleSideHustleLevelChange = (index, field, value) => {
@@ -314,6 +377,11 @@ const [missions, setMissions] = useState([]);
   const handleSaveSideHustle = async (e) => {
       e.preventDefault();
 
+      if (sideHustleForm.status === "scheduled" && !sideHustleForm.scheduled_date) {
+          alert("Please choose a drop date for scheduled side hustles.");
+          return;
+      }
+
       const cleanedLevels = sideHustleLevels
           .map((level, index) => ({
               title: level.title || `Level ${index + 1}`,
@@ -328,15 +396,25 @@ const [missions, setMissions] = useState([]);
           reward_cash: Number(sideHustleForm.reward_cash) || 0,
           reward_xp: Number(sideHustleForm.reward_xp) || 0,
           levels: cleanedLevels,
-          updatedAt: serverTimestamp()
+          updatedAt: serverTimestamp(),
+          scheduled_date: sideHustleForm.status === "scheduled" ? sideHustleForm.scheduled_date : ""
       };
 
       try {
+          const newDocRef = editingSideHustleId
+              ? doc(db, "side_hustles", editingSideHustleId)
+              : doc(collection(db, "side_hustles"));
+
+          const finalPayload = {
+              ...payload,
+              image_url: sideHustleForm.image_url || ""
+          };
+
           if (editingSideHustleId) {
-              await updateDoc(doc(db, "side_hustles", editingSideHustleId), payload);
+              await updateDoc(newDocRef, finalPayload);
           } else {
-              await addDoc(collection(db, "side_hustles"), {
-                  ...payload,
+              await setDoc(newDocRef, {
+                  ...finalPayload,
                   createdAt: serverTimestamp()
               });
           }
@@ -348,6 +426,9 @@ const [missions, setMissions] = useState([]);
   };
 
   const handleEditSideHustle = (hustle) => {
+      if (sideHustleImagePreview?.startsWith("blob:")) {
+          URL.revokeObjectURL(sideHustleImagePreview);
+      }
       setSideHustleForm({
           title: hustle.title || "",
           tagline: hustle.tagline || "",
@@ -356,8 +437,11 @@ const [missions, setMissions] = useState([]);
           reward_cash: hustle.reward_cash || 0,
           reward_xp: hustle.reward_xp || 0,
           class_id: hustle.class_id || "all",
-          image_url: hustle.image_url || ""
+          image_url: hustle.image_url || "",
+          status: hustle.status || "live",
+          scheduled_date: hustle.scheduled_date || ""
       });
+      setSideHustleImagePreview(hustle.image_url || "");
       setSideHustleLevels(
           Array.isArray(hustle.levels) && hustle.levels.length > 0
               ? hustle.levels.map((level, index) => ({
@@ -555,6 +639,16 @@ const [missions, setMissions] = useState([]);
       await batch.commit();
   };
 
+  const getBoostedXp = (baseXp, userData) => {
+      const rawExpiry = userData?.xpBoostExpiresAt;
+      if (!rawExpiry) return baseXp;
+      const expiryDate = rawExpiry?.toDate ? rawExpiry.toDate() : new Date(rawExpiry);
+      if (!expiryDate || Number.isNaN(expiryDate.getTime())) return baseXp;
+      if (expiryDate <= new Date()) return baseXp;
+      const boostPercent = Number(userData?.xpBoostPercent) || 10;
+      return Math.ceil(Number(baseXp || 0) * (1 + boostPercent / 100));
+  };
+
   // --- APPROVAL ACTIONS ---
   const approveSubmission = async (job) => {
       try {
@@ -564,7 +658,12 @@ const [missions, setMissions] = useState([]);
           // 1. GET THE REWARDS FROM LOOKUP
           const contractData = contractLookup[job.contract_id];
           const payAmount = contractData?.bounty ? Number(contractData.bounty) : 0;
-          const xpAmount = contractData?.xp_reward ? Number(contractData.xp_reward) : 0;
+          const baseXp = contractData?.xp_reward ? Number(contractData.xp_reward) : 0;
+
+          const userRef = doc(db, "users", job.student_id);
+          const userSnap = await getDoc(userRef);
+          const userData = userSnap.exists() ? userSnap.data() : {};
+          const xpAmount = getBoostedXp(baseXp, userData);
 
           console.log(`Approving Stage ${currentStage}. Paying: $${payAmount} & ${xpAmount}XP`);
 
@@ -575,7 +674,6 @@ const [missions, setMissions] = useState([]);
           updates[`stages.${currentStage}.completedAt`] = new Date().toISOString();
 
           // B. PAY THE STUDENT (Happens every time now)
-          const userRef = doc(db, "users", job.student_id);
           await updateDoc(userRef, {
               currency: increment(payAmount), 
               xp: increment(xpAmount),        
@@ -590,7 +688,7 @@ const [missions, setMissions] = useState([]);
 
               await addDoc(collection(db, "users", job.student_id, "alerts"), {
                   type: "success",
-                  message: `Mission "${job.contract_title}" COMPLETED! Final Payment: $${payAmount}.`,
+                  message: `Mission "${job.contract_title}" COMPLETED! Final Payment: $${payAmount} and +${xpAmount} XP.`,
                   read: false,
                   createdAt: serverTimestamp()
               });
@@ -607,7 +705,7 @@ const [missions, setMissions] = useState([]);
               
               await addDoc(collection(db, "users", job.student_id, "alerts"), {
                   type: "success",
-                  message: `Stage ${currentStage} approved! You earned $${payAmount}. Proceed to Stage ${nextStage}.`,
+                  message: `Stage ${currentStage} approved! You earned $${payAmount} and +${xpAmount} XP. Proceed to Stage ${nextStage}.`,
                   read: false,
                   createdAt: serverTimestamp()
               });
@@ -627,12 +725,17 @@ const [missions, setMissions] = useState([]);
           const submittedLevel = Number(job.last_submitted_level || job.current_level || 1);
           const levelData = Array.isArray(hustle?.levels) ? hustle.levels[submittedLevel - 1] : null;
           const payAmount = levelData?.reward_cash ?? hustle?.reward_cash ?? 0;
-          const xpAmount = levelData?.reward_xp ?? hustle?.reward_xp ?? 0;
+          const baseXp = levelData?.reward_xp ?? hustle?.reward_xp ?? 0;
 
           const totalLevels = Array.isArray(hustle?.levels) ? hustle.levels.length : 0;
           const nextLevel = totalLevels > 0 ? Math.min(submittedLevel + 1, totalLevels) : submittedLevel + 1;
 
-          await updateDoc(doc(db, "users", job.student_id), {
+          const userRef = doc(db, "users", job.student_id);
+          const userSnap = await getDoc(userRef);
+          const userData = userSnap.exists() ? userSnap.data() : {};
+          const xpAmount = getBoostedXp(baseXp, userData);
+
+          await updateDoc(userRef, {
               currency: increment(Number(payAmount) || 0),
               xp: increment(Number(xpAmount) || 0)
           });
@@ -710,11 +813,20 @@ const [missions, setMissions] = useState([]);
   const handleSaveItem = async (e) => {
       e.preventDefault();
       try {
+          const payload = {
+              ...shopForm,
+              price: Number(shopForm.price) || 0,
+              stock: Number(shopForm.stock) || 0,
+              xpBoostPercent: shopForm.effectType === "xp_boost" ? Number(shopForm.xpBoostPercent) || 10 : null,
+              xpBoostDays: shopForm.effectType === "xp_boost" ? Number(shopForm.xpBoostDays) || 14 : null,
+              effectType: shopForm.effectType || "none"
+          };
+
           if (editingItem) {
-              await updateDoc(doc(db, "shop_items", editingItem.id), shopForm);
+              await updateDoc(doc(db, "shop_items", editingItem.id), payload);
           } else {
               await addDoc(collection(db, "shop_items"), {
-                  ...shopForm,
+                  ...payload,
                   createdAt: serverTimestamp()
               });
           }
@@ -734,7 +846,11 @@ const [missions, setMissions] = useState([]);
       setEditingItem(item);
       setShopForm({ 
           title: item.title, desc: item.desc, price: item.original_price || item.price, // Always edit the REAL price
-          stock: item.stock, iconName: item.iconName 
+          stock: item.stock, 
+          iconName: item.iconName,
+          effectType: item.effectType || "none",
+          xpBoostPercent: item.xpBoostPercent || 10,
+          xpBoostDays: item.xpBoostDays || 14
       });
       setIsShopFormOpen(true);
   };
@@ -742,8 +858,16 @@ const [missions, setMissions] = useState([]);
   const closeShopForm = () => {
       setIsShopFormOpen(false);
       setEditingItem(null);
-      setShopForm({ title: "", desc: "", price: Number(shopForm.price) || 0,
-              stock: Number(shopForm.stock) || 0, iconName: "briefcase" });
+      setShopForm({ 
+          title: "", 
+          desc: "", 
+          price: Number(shopForm.price) || 0,
+          stock: Number(shopForm.stock) || 0, 
+          iconName: "briefcase",
+          effectType: "none",
+          xpBoostPercent: 10,
+          xpBoostDays: 14
+      });
   };
 
   // --- FILTERING ---
@@ -1171,7 +1295,7 @@ const [missions, setMissions] = useState([]);
                                     onChange={(e) => setClassForm({ ...classForm, name: e.target.value })}
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="text-xs font-bold uppercase text-slate-500">Class ID</label>
                                     <input
@@ -1365,6 +1489,40 @@ const [missions, setMissions] = useState([]);
                                     {AVAILABLE_ICONS.map(i => <option key={i} value={i}>{i}</option>)}
                                 </select>
                             </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-500">Effect</label>
+                                <select
+                                    className="w-full p-2 border rounded mt-1 bg-white text-sm"
+                                    value={shopForm.effectType}
+                                    onChange={e => setShopForm({...shopForm, effectType: e.target.value})}
+                                >
+                                    <option value="none">Standard item</option>
+                                    <option value="xp_boost">XP Multiplier</option>
+                                </select>
+                            </div>
+
+                            {shopForm.effectType === "xp_boost" && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500">Boost %</label>
+                                        <input
+                                            type="number"
+                                            className="w-full p-2 border rounded mt-1 text-sm"
+                                            value={shopForm.xpBoostPercent}
+                                            onChange={e => setShopForm({...shopForm, xpBoostPercent: parseInt(e.target.value)})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500">Duration (days)</label>
+                                        <input
+                                            type="number"
+                                            className="w-full p-2 border rounded mt-1 text-sm"
+                                            value={shopForm.xpBoostDays}
+                                            onChange={e => setShopForm({...shopForm, xpBoostDays: parseInt(e.target.value)})}
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             {isShopFormOpen && (
                                 <button className="w-full bg-slate-900 text-white font-bold py-2 rounded hover:bg-slate-800 transition">
@@ -1643,6 +1801,30 @@ const [missions, setMissions] = useState([]);
                                 </div>
 
                                 <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Status</label>
+                                    <select
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                                        value={sideHustleForm.status || "live"}
+                                        onChange={(e) => setSideHustleForm({ ...sideHustleForm, status: e.target.value })}
+                                    >
+                                        <option value="live">Live</option>
+                                        <option value="scheduled">Scheduled Drop</option>
+                                    </select>
+                                </div>
+
+                                {sideHustleForm.status === "scheduled" && (
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500">Drop Date</label>
+                                        <input
+                                            type="date"
+                                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                                            value={sideHustleForm.scheduled_date || ""}
+                                            onChange={(e) => setSideHustleForm({ ...sideHustleForm, scheduled_date: e.target.value })}
+                                        />
+                                    </div>
+                                )}
+
+                                <div>
                                     <label className="text-xs font-bold uppercase text-slate-500">Card Summary</label>
                                     <input
                                         type="text"
@@ -1659,9 +1841,44 @@ const [missions, setMissions] = useState([]);
                                         type="text"
                                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                                         value={sideHustleForm.image_url}
-                                        onChange={(e) => setSideHustleForm({ ...sideHustleForm, image_url: e.target.value })}
+                                        onChange={(e) => {
+                                            const nextUrl = e.target.value;
+                                            setSideHustleForm({ ...sideHustleForm, image_url: nextUrl });
+                                            setSideHustlePreview(nextUrl);
+                                        }}
                                         placeholder="/side.png or hosted URL"
                                     />
+
+                                    <div className="mt-3 space-y-2">
+                                        <label className="text-xs font-bold uppercase text-slate-500">Upload Image</label>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleSideHustleImageChange}
+                                            className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 file:font-bold hover:file:bg-slate-200"
+                                        />
+                                        {(sideHustleForm.image_url || sideHustleImagePreview) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSideHustleForm({ ...sideHustleForm, image_url: "" });
+                                                    setSideHustlePreview("");
+                                                }}
+                                                className="text-xs font-bold text-red-500 hover:text-red-700"
+                                            >
+                                                Clear Image
+                                            </button>
+                                        )}
+                                        {sideHustleImagePreview && (
+                                            <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                                <img
+                                                    src={sideHustleImagePreview}
+                                                    alt="Side hustle preview"
+                                                    className="w-full h-32 object-cover"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div>
@@ -1765,7 +1982,7 @@ const [missions, setMissions] = useState([]);
                         {/* RIGHT: LIVE LIST */}
                         <div className="lg:col-span-2">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-xs font-bold uppercase text-slate-400">Live Hustles</h3>
+                                <h3 className="text-xs font-bold uppercase text-slate-400">All Hustles</h3>
                                 <span className="text-xs text-slate-400">{sideHustles.length} total</span>
                             </div>
                             {sideHustles.length === 0 ? (
@@ -1782,8 +1999,11 @@ const [missions, setMissions] = useState([]);
                                                         <p className="text-sm font-bold text-slate-800">{hustle.title}</p>
                                                         <p className="text-[10px] text-slate-400 uppercase">{hustle.class_id || "all"}</p>
                                                     </div>
-                                                    <div className="text-xs font-bold text-slate-500">
+                                            <div className="text-xs font-bold text-slate-500 text-right">
                                                         ${hustle.reward_cash} • {hustle.reward_xp} XP
+                                                        <div className="text-[10px] uppercase text-slate-400 mt-1">
+                                                            {formatSideHustleStatus(hustle.status, hustle.scheduled_date)}
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 {hustle.summary && (
@@ -1795,6 +2015,37 @@ const [missions, setMissions] = useState([]);
                                                     {Array.isArray(hustle.levels) ? hustle.levels.length : 0} levels
                                                 </span>
                                                 <div className="flex items-center gap-2">
+                                                    {hustle.status === "archived" ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await updateDoc(doc(db, "side_hustles", hustle.id), { status: "live" });
+                                                                } catch (error) {
+                                                                    console.error("Failed to restore side hustle:", error);
+                                                                }
+                                                            }}
+                                                            className="text-slate-400 hover:text-emerald-600 p-2 rounded-lg hover:bg-emerald-50 transition text-xs font-bold"
+                                                            title="Restore"
+                                                        >
+                                                            Restore
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await updateDoc(doc(db, "side_hustles", hustle.id), { status: "archived" });
+                                                                } catch (error) {
+                                                                    console.error("Failed to archive side hustle:", error);
+                                                                }
+                                                            }}
+                                                            className="text-slate-400 hover:text-slate-900 p-2 rounded-lg hover:bg-slate-100 transition text-xs font-bold"
+                                                            title="Archive"
+                                                        >
+                                                            Archive
+                                                        </button>
+                                                    )}
                                                     <button
                                                         type="button"
                                                         onClick={() => handleEditSideHustle(hustle)}

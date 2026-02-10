@@ -17,11 +17,11 @@ const AVAILABLE_ICONS = [
 
 // --- 2. DEFAULT SEED DATA (To save you typing) ---
 const SEED_BADGES = [
-    { title: "First Blood", description: "Completed your first mission.", xpReward: 100, iconName: "star" },
-    { title: "Pixel Perfect", description: "Submitted a design with zero requested revisions.", xpReward: 500, iconName: "target" },
-    { title: "Night Owl", description: "Submitted a mission after 8 PM.", xpReward: 200, iconName: "medal" },
-    { title: "Top Earner", description: "Reached $10,000 in career earnings.", xpReward: 1000, iconName: "crown" },
-    { title: "Streak Master", description: "Completed 3 missions in a row without rejection.", xpReward: 800, iconName: "zap" }
+    { title: "First Blood", description: "Completed your first mission.", xpReward: 100, currencyReward: 50, iconName: "star" },
+    { title: "Pixel Perfect", description: "Submitted a design with zero requested revisions.", xpReward: 500, currencyReward: 150, iconName: "target" },
+    { title: "Night Owl", description: "Submitted a mission after 8 PM.", xpReward: 200, currencyReward: 75, iconName: "medal" },
+    { title: "Top Earner", description: "Reached $10,000 in career earnings.", xpReward: 1000, currencyReward: 500, iconName: "crown" },
+    { title: "Streak Master", description: "Completed 3 missions in a row without rejection.", xpReward: 800, currencyReward: 250, iconName: "zap" }
 ];
 
 export default function AllContracts() {
@@ -35,7 +35,7 @@ export default function AllContracts() {
 
   // FORM STATE (For Badges)
   const [editingBadgeId, setEditingBadgeId] = useState(null);
-  const [badgeForm, setBadgeForm] = useState({ title: "", description: "", xpReward: 0, iconName: "medal" });
+  const [badgeForm, setBadgeForm] = useState({ title: "", description: "", xpReward: 0, currencyReward: 0, iconName: "medal" });
 
   const fetchData = async () => {
       setLoading(true);
@@ -79,7 +79,7 @@ export default function AllContracts() {
       } else {
           await addDoc(collection(db, "badges"), badgeForm);
       }
-      setBadgeForm({ title: "", description: "", xpReward: 0, iconName: "medal" });
+      setBadgeForm({ title: "", description: "", xpReward: 0, currencyReward: 0, iconName: "medal" });
       setEditingBadgeId(null);
       fetchData();
   };
@@ -90,6 +90,7 @@ export default function AllContracts() {
           title: badge.title, 
           description: badge.description, 
           xpReward: badge.xpReward, 
+          currencyReward: badge.currencyReward || 0,
           iconName: badge.iconName 
       });
   };
@@ -238,15 +239,24 @@ export default function AllContracts() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-xs font-bold uppercase text-slate-500">Icon</label>
-                                        <select 
-                                            className="w-full p-2 border rounded mt-1 bg-white"
-                                            value={badgeForm.iconName}
-                                            onChange={e => setBadgeForm({...badgeForm, iconName: e.target.value})}
-                                        >
-                                            {AVAILABLE_ICONS.map(i => <option key={i} value={i}>{i}</option>)}
-                                        </select>
+                                        <label className="text-xs font-bold uppercase text-slate-500">Cash Reward ($)</label>
+                                        <input 
+                                            type="number"
+                                            className="w-full p-2 border rounded mt-1"
+                                            value={badgeForm.currencyReward}
+                                            onChange={e => setBadgeForm({...badgeForm, currencyReward: parseInt(e.target.value)})}
+                                        />
                                     </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500">Icon</label>
+                                    <select 
+                                        className="w-full p-2 border rounded mt-1 bg-white"
+                                        value={badgeForm.iconName}
+                                        onChange={e => setBadgeForm({...badgeForm, iconName: e.target.value})}
+                                    >
+                                        {AVAILABLE_ICONS.map(i => <option key={i} value={i}>{i}</option>)}
+                                    </select>
                                 </div>
 
                                 <div className="flex gap-2 pt-2">
@@ -256,7 +266,7 @@ export default function AllContracts() {
                                     {editingBadgeId && (
                                         <button 
                                             type="button" 
-                                            onClick={() => {setEditingBadgeId(null); setBadgeForm({ title: "", description: "", xpReward: 0, iconName: "medal" });}}
+                                            onClick={() => {setEditingBadgeId(null); setBadgeForm({ title: "", description: "", xpReward: 0, currencyReward: 0, iconName: "medal" });}}
                                             className="px-4 bg-slate-200 text-slate-600 font-bold py-2 rounded"
                                         >
                                             Cancel
@@ -288,9 +298,16 @@ export default function AllContracts() {
                                         <div className="flex-1">
                                             <h4 className="font-bold text-slate-800">{badge.title}</h4>
                                             <p className="text-xs text-slate-500 leading-snug mb-2">{badge.description}</p>
-                                            <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-1 rounded font-bold">
-                                                +{badge.xpReward || 0} XP
-                                            </span>
+                                            <div className="flex flex-wrap gap-2">
+                                                <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-1 rounded font-bold">
+                                                    +{badge.xpReward || 0} XP
+                                                </span>
+                                                {Number(badge.currencyReward || 0) > 0 && (
+                                                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">
+                                                        +${badge.currencyReward}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="flex flex-col gap-1">
                                             <button onClick={() => editBadge(badge)} className="p-1 text-slate-400 hover:text-indigo-600"><Edit size={16}/></button>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { db } from "../../lib/firebase";
-import { collection, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, writeBatch, arrayRemove, arrayUnion } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, writeBatch, arrayRemove, arrayUnion, getDoc } from "firebase/firestore";
 import { CLASS_CODES } from "../../lib/gameConfig"; // <--- REMOVED "BADGES"
 import { 
     Users, Filter, Search, DollarSign, 
@@ -31,6 +31,9 @@ export default function AdminRoster() {
   const [selectedBadgeId, setSelectedBadgeId] = useState(""); 
   const [adminMessage, setAdminMessage] = useState("");
   const [sendingMsg, setSendingMsg] = useState(false);
+  const [classMessage, setClassMessage] = useState("");
+  const [classMessageTarget, setClassMessageTarget] = useState("");
+  const [sendingClassMsg, setSendingClassMsg] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
 
@@ -82,6 +85,15 @@ export default function AdminRoster() {
   }, [user]); // <--- Dependency array now watches 'user'
 
   // --- ACTIONS ---
+  const getBoostedXp = (baseXp, userData) => {
+    const rawExpiry = userData?.xpBoostExpiresAt;
+    if (!rawExpiry) return baseXp;
+    const expiryDate = rawExpiry?.toDate ? rawExpiry.toDate() : new Date(rawExpiry);
+    if (!expiryDate || Number.isNaN(expiryDate.getTime())) return baseXp;
+    if (expiryDate <= new Date()) return baseXp;
+    const boostPercent = Number(userData?.xpBoostPercent) || 10;
+    return Math.ceil(Number(baseXp || 0) * (1 + boostPercent / 100));
+  };
 
   // 1. Manual Bonus
   const handleBonusSubmit = async (e) => {
@@ -92,13 +104,18 @@ export default function AdminRoster() {
     const xpAmount = parseInt(bonusForm.xp) || 0;
 
     try {
-        await updateDoc(doc(db, "users", selectedStudentId), {
+        const userRef = doc(db, "users", selectedStudentId);
+        const userSnap = await getDoc(userRef);
+        const userData = userSnap.exists() ? userSnap.data() : {};
+        const boostedXp = getBoostedXp(xpAmount, userData);
+
+        await updateDoc(userRef, {
             currency: increment(currencyAmount),
-            xp: increment(xpAmount)
+            xp: increment(boostedXp)
         });
         
         setBonusForm({ currency: 0, xp: 0 });
-        alert(`Stats updated: $${currencyAmount} / ${xpAmount} ${labels.xp}`);
+        alert(`Stats updated: $${currencyAmount} / ${boostedXp} ${labels.xp}`);
     } catch (error) {
         console.error("Error giving bonus:", error);
         alert("Failed to update stats.");
@@ -116,6 +133,11 @@ export default function AdminRoster() {
 
       try {
           const userRef = doc(db, "users", selectedStudentId);
+          const userSnap = await getDoc(userRef);
+          const userData = userSnap.exists() ? userSnap.data() : {};
+          const baseXp = Number(badge.xpReward || 0);
+          const boostedXp = getBoostedXp(baseXp, userData);
+          const cashReward = Number(badge.currencyReward || 0);
           
           // Use Dot Notation to update the Map (not an array push)
           await updateDoc(userRef, {
@@ -123,12 +145,12 @@ export default function AdminRoster() {
                   earnedAt: new Date().toISOString(),
                   title: badge.title
               },
-              // Optional: Auto-award the XP attached to the badge
-              xp: increment(badge.xpReward || 0) 
+              xp: increment(boostedXp),
+              currency: increment(cashReward)
           });
 
           setSelectedBadgeId(""); 
-          alert(`Awarded "${badge.title}" and ${badge.xpReward || 0} XP!`);
+          alert(`Awarded "${badge.title}" +${boostedXp} ${labels.xp} and $${cashReward}!`);
       } catch (error) {
           console.error("Error awarding badge:", error);
           alert("Failed to award badge.");
@@ -155,6 +177,51 @@ export default function AdminRoster() {
         alert("Transmission Failed");
     }
     setSendingMsg(false);
+  };
+
+  // 3b. Send Class Message
+  const sendClassMessage = async (e) => {
+    e.preventDefault();
+    if (!classMessageTarget || !classMessage.trim()) return;
+
+    const recipients = students.filter((student) => {
+      if (Array.isArray(student.enrolled_classes) && student.enrolled_classes.length > 0) {
+        return student.enrolled_classes.includes(classMessageTarget);
+      }
+      return student.class_id === classMessageTarget;
+    });
+
+    if (recipients.length === 0) {
+      alert("No students found for that class.");
+      return;
+    }
+
+    setSendingClassMsg(true);
+    try {
+      const chunkSize = 400;
+      for (let i = 0; i < recipients.length; i += chunkSize) {
+        const batch = writeBatch(db);
+        const chunk = recipients.slice(i, i + chunkSize);
+        chunk.forEach((student) => {
+          const alertRef = doc(collection(db, "users", student.id, "alerts"));
+          batch.set(alertRef, {
+            message: classMessage,
+            createdAt: serverTimestamp(),
+            read: false,
+            type: "admin_class_broadcast",
+            class_id: classMessageTarget
+          });
+        });
+        await batch.commit();
+      }
+
+      setClassMessage("");
+      alert(`Transmission sent to ${recipients.length} students.`);
+    } catch (error) {
+      console.error("Error sending class message:", error);
+      alert("Transmission failed.");
+    }
+    setSendingClassMsg(false);
   };
 
   // 4. Redeem Item
@@ -768,6 +835,44 @@ export default function AdminRoster() {
                             className="w-full py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-indigo-600 transition flex items-center justify-center gap-2 disabled:opacity-50"
                         >
                             {sendingMsg ? "Transmitting..." : <><Send size={14}/> Send Transmission</>}
+                        </button>
+                    </form>
+                </div>
+
+                {/* 4. SEND CLASS MESSAGE */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <Send className="text-indigo-600" size={20}/> Send Class Transmission
+                    </h2>
+                    <form onSubmit={sendClassMessage} className="space-y-3">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Select Class</label>
+                            <select
+                                className="w-full border p-2 rounded mt-1 text-sm bg-white"
+                                value={classMessageTarget}
+                                onChange={(e) => setClassMessageTarget(e.target.value)}
+                            >
+                                <option value="">-- Choose Class --</option>
+                                {(classes.length > 0 ? classes : classDirectorySource).map((cls) => (
+                                    <option key={cls.id} value={cls.id}>
+                                        {cls.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <textarea
+                            className="w-full p-3 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            rows="3"
+                            placeholder="Message for the entire class..."
+                            value={classMessage}
+                            onChange={(e) => setClassMessage(e.target.value)}
+                        />
+                        <button 
+                            type="submit" 
+                            disabled={sendingClassMsg || !classMessage || !classMessageTarget}
+                            className="w-full py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            {sendingClassMsg ? "Transmitting..." : <><Send size={14}/> Send to Class</>}
                         </button>
                     </form>
                 </div>
