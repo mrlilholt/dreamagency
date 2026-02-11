@@ -72,23 +72,28 @@ export const getActiveEventsForClasses = (events, classIds, orgId) => {
 
 export const eventAppliesToType = (event, eventType) => {
   if (!event) return false;
-  const appliesTo = event.appliesTo || event.targetType || "all_submissions";
-  const normalizedAppliesTo = normalizeKey(appliesTo);
-  if (
-    normalizedAppliesTo === "all_submissions" ||
-    normalizedAppliesTo === "all" ||
-    normalizedAppliesTo === "all_items"
-  ) {
+  const appliesToRaw = Array.isArray(event.appliesToTypes)
+    ? event.appliesToTypes
+    : event.appliesTo
+      ? [event.appliesTo]
+      : event.targetType
+        ? [event.targetType]
+        : [];
+  const normalizedList = appliesToRaw
+    .map((value) => normalizeKey(value))
+    .filter(Boolean);
+  if (normalizedList.length === 0) return true;
+  if (normalizedList.includes("all_submissions") || normalizedList.includes("all") || normalizedList.includes("all_items")) {
     return true;
   }
   if (!eventType) return false;
-  if (normalizedAppliesTo === "contract_stage" || normalizedAppliesTo === "contract") {
+  if (normalizedList.includes("contract_stage") || normalizedList.includes("contract")) {
     return eventType === "contract_stage";
   }
-  if (normalizedAppliesTo === "side_hustle" || normalizedAppliesTo === "side_hustles") {
+  if (normalizedList.includes("side_hustle") || normalizedList.includes("side_hustles")) {
     return eventType === "side_hustle";
   }
-  if (normalizedAppliesTo === "mission" || normalizedAppliesTo === "missions") {
+  if (normalizedList.includes("mission") || normalizedList.includes("missions")) {
     return eventType === "mission";
   }
   return false;

@@ -23,7 +23,7 @@ const emptyForm = {
   scope: "all",
   classIds: [],
   modalBackgroundUrl: "",
-  appliesTo: "all_submissions",
+  appliesToTypes: ["all_submissions"],
   oneTimePerUser: false,
   enabled: true,
   startAt: "",
@@ -96,7 +96,7 @@ export default function AdminEvents() {
         flatCurrencyBonus: 0,
         randomCurrencyBonusMin: 0,
         randomCurrencyBonusMax: 0,
-        appliesTo: prev.appliesTo || "all_submissions"
+        appliesToTypes: prev.appliesToTypes?.length ? prev.appliesToTypes : ["all_submissions"]
       }));
     }
     if (template === "flat") {
@@ -110,7 +110,7 @@ export default function AdminEvents() {
         flatCurrencyBonus: 500,
         randomCurrencyBonusMin: 0,
         randomCurrencyBonusMax: 0,
-        appliesTo: prev.appliesTo || "all_submissions"
+        appliesToTypes: prev.appliesToTypes?.length ? prev.appliesToTypes : ["all_submissions"]
       }));
     }
     if (template === "random") {
@@ -124,7 +124,7 @@ export default function AdminEvents() {
         flatCurrencyBonus: 0,
         randomCurrencyBonusMin: 50,
         randomCurrencyBonusMax: 250,
-        appliesTo: prev.appliesTo || "all_submissions"
+        appliesToTypes: prev.appliesToTypes?.length ? prev.appliesToTypes : ["all_submissions"]
       }));
     }
   };
@@ -142,6 +142,20 @@ export default function AdminEvents() {
       return;
     }
     setForm((prev) => ({ ...prev, scope: "specific", classIds: value ? [value] : [] }));
+  };
+
+  const toggleAppliesTo = (value) => {
+    setForm((prev) => {
+      const current = Array.isArray(prev.appliesToTypes) ? prev.appliesToTypes : [];
+      if (value === "all_submissions") {
+        return { ...prev, appliesToTypes: ["all_submissions"] };
+      }
+      const filtered = current.filter((item) => item !== "all_submissions");
+      if (filtered.includes(value)) {
+        return { ...prev, appliesToTypes: filtered.filter((item) => item !== value) };
+      }
+      return { ...prev, appliesToTypes: [...filtered, value] };
+    });
   };
 
   const setModalBackground = (nextUrl) => {
@@ -185,6 +199,12 @@ export default function AdminEvents() {
 
     setSaving(true);
     try {
+      const appliesToTypes = form.appliesToTypes?.length
+        ? form.appliesToTypes
+        : ["all_submissions"];
+      const primaryAppliesTo = appliesToTypes.includes("all_submissions")
+        ? "all_submissions"
+        : appliesToTypes[0] || "all_submissions";
       const payload = {
         title: form.title.trim(),
         description: form.description.trim(),
@@ -193,7 +213,8 @@ export default function AdminEvents() {
         scope: form.scope,
         classIds: form.scope === "all" ? [] : form.classIds,
         modalBackgroundUrl: form.modalBackgroundUrl || "",
-        appliesTo: form.appliesTo || "all_submissions",
+        appliesTo: primaryAppliesTo,
+        appliesToTypes,
         oneTimePerUser: !!form.oneTimePerUser,
         enabled: form.enabled,
         startAt: form.startAt ? Timestamp.fromDate(new Date(form.startAt)) : null,
@@ -237,7 +258,9 @@ export default function AdminEvents() {
       scope: event.scope || "all",
       classIds: event.classIds || [],
       modalBackgroundUrl: event.modalBackgroundUrl || "",
-      appliesTo: event.appliesTo || "all_submissions",
+      appliesToTypes: Array.isArray(event.appliesToTypes) && event.appliesToTypes.length
+        ? event.appliesToTypes
+        : [event.appliesTo || "all_submissions"],
       oneTimePerUser: !!event.oneTimePerUser,
       enabled: event.enabled !== false,
       startAt: formatDateTimeLocal(event.startAt),
@@ -387,33 +410,33 @@ export default function AdminEvents() {
                 <div className="flex flex-wrap gap-4 mt-3">
                   <label className="flex items-center gap-2 text-sm">
                     <input
-                      type="radio"
-                      checked={form.appliesTo === "contract_stage"}
-                      onChange={() => updateField("appliesTo", "contract_stage")}
+                      type="checkbox"
+                      checked={form.appliesToTypes?.includes("contract_stage")}
+                      onChange={() => toggleAppliesTo("contract_stage")}
                     />
                     Contract stages
                   </label>
                   <label className="flex items-center gap-2 text-sm">
                     <input
-                      type="radio"
-                      checked={form.appliesTo === "side_hustle"}
-                      onChange={() => updateField("appliesTo", "side_hustle")}
+                      type="checkbox"
+                      checked={form.appliesToTypes?.includes("side_hustle")}
+                      onChange={() => toggleAppliesTo("side_hustle")}
                     />
                     Side hustles
                   </label>
                   <label className="flex items-center gap-2 text-sm">
                     <input
-                      type="radio"
-                      checked={form.appliesTo === "mission"}
-                      onChange={() => updateField("appliesTo", "mission")}
+                      type="checkbox"
+                      checked={form.appliesToTypes?.includes("mission")}
+                      onChange={() => toggleAppliesTo("mission")}
                     />
                     Missions
                   </label>
                   <label className="flex items-center gap-2 text-sm">
                     <input
-                      type="radio"
-                      checked={form.appliesTo === "all_submissions"}
-                      onChange={() => updateField("appliesTo", "all_submissions")}
+                      type="checkbox"
+                      checked={form.appliesToTypes?.includes("all_submissions")}
+                      onChange={() => toggleAppliesTo("all_submissions")}
                     />
                     All submissions
                   </label>
@@ -636,17 +659,25 @@ export default function AdminEvents() {
                       {(event.randomCurrencyBonusMin || event.randomCurrencyBonusMax) && (
                         <span>Random +${event.randomCurrencyBonusMin || 0}–${event.randomCurrencyBonusMax || event.randomCurrencyBonusMin || 0}</span>
                       )}
-                      {event.appliesTo && (
-                        <span>
-                          Applies to {event.appliesTo === "all_submissions"
-                            ? "all submissions"
-                            : event.appliesTo === "mission"
-                              ? "missions"
-                              : event.appliesTo === "side_hustle"
-                                ? "side hustles"
-                                : "contract stages"}
-                        </span>
-                      )}
+                      {(() => {
+                        const appliesToList = Array.isArray(event.appliesToTypes) && event.appliesToTypes.length
+                          ? event.appliesToTypes
+                          : event.appliesTo
+                            ? [event.appliesTo]
+                            : [];
+                        if (!appliesToList.length) return null;
+                        const labelMap = {
+                          all_submissions: "all submissions",
+                          mission: "missions",
+                          side_hustle: "side hustles",
+                          contract_stage: "contract stages"
+                        };
+                        const hasAll = appliesToList.includes("all_submissions");
+                        const readable = hasAll
+                          ? ["all submissions"]
+                          : appliesToList.map((value) => labelMap[value] || value);
+                        return <span>Applies to {readable.join(", ")}</span>;
+                      })()}
                     </div>
                     <div className="mt-4 flex items-center justify-between gap-3">
                       <button
