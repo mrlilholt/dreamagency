@@ -1,6 +1,20 @@
 const toNumber = (value) => {
+  if (typeof value === "string") {
+    const cleaned = value.replace(/[^\d.-]/g, "");
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : 0;
+  }
   const num = Number(value);
   return Number.isFinite(num) ? num : 0;
+};
+
+const normalizeKey = (value) => {
+  if (!value) return "";
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/-+/g, "_");
 };
 
 export const parseEventDate = (value) => {
@@ -27,13 +41,16 @@ export const eventAppliesToClass = (event, classId, orgId) => {
   if (!event) return false;
   if (orgId && event.orgId && event.orgId !== orgId) return false;
   const scope = event.scope || event.classScope || (event.classId === "all" ? "all" : null);
-  if (scope === "all") return true;
+  const normalizedScope = normalizeKey(scope);
+  if (normalizedScope === "all" || normalizedScope === "all_classes" || normalizedScope === "all_class") {
+    return true;
+  }
   if (event.classId && event.classId !== "all") return event.classId === classId;
   const classIds = event.classIds || event.classes || event.allowedClasses;
   if (Array.isArray(classIds) && classIds.length) {
     return classIds.includes(classId);
   }
-  return false;
+  return !scope && !event.classId && !classIds;
 };
 
 export const getActiveEventsForClass = (events, classId, orgId) => {
@@ -56,11 +73,24 @@ export const getActiveEventsForClasses = (events, classIds, orgId) => {
 export const eventAppliesToType = (event, eventType) => {
   if (!event) return false;
   const appliesTo = event.appliesTo || event.targetType || "all_submissions";
-  if (appliesTo === "all_submissions") return true;
+  const normalizedAppliesTo = normalizeKey(appliesTo);
+  if (
+    normalizedAppliesTo === "all_submissions" ||
+    normalizedAppliesTo === "all" ||
+    normalizedAppliesTo === "all_items"
+  ) {
+    return true;
+  }
   if (!eventType) return false;
-  if (appliesTo === "contract_stage") return eventType === "contract_stage";
-  if (appliesTo === "side_hustle") return eventType === "side_hustle";
-  if (appliesTo === "mission") return eventType === "mission";
+  if (normalizedAppliesTo === "contract_stage" || normalizedAppliesTo === "contract") {
+    return eventType === "contract_stage";
+  }
+  if (normalizedAppliesTo === "side_hustle" || normalizedAppliesTo === "side_hustles") {
+    return eventType === "side_hustle";
+  }
+  if (normalizedAppliesTo === "mission" || normalizedAppliesTo === "missions") {
+    return eventType === "mission";
+  }
   return false;
 };
 
