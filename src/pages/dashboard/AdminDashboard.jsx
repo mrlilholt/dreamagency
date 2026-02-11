@@ -45,6 +45,13 @@ import AdminShell from "../../components/AdminShell";
 import { CLASS_CODES } from "../../lib/gameConfig";
 import { THEME_OPTIONS } from "../../lib/themeConfig";
 import { useTheme } from "../../context/ThemeContext";
+import { 
+    applyEventRewards, 
+    formatEventBonusMessage, 
+    getActiveEventsForClass,
+    getOneTimeEvents,
+    filterEventsByClaims
+} from "../../lib/eventUtils";
 // --- ICON LIST (For Shop) ---
 const AVAILABLE_ICONS = [
     "life-buoy", "map-pin", "briefcase", "pen-tool", "clock", 
@@ -96,6 +103,7 @@ export default function AdminDashboard() {
   // --- LOOKUP STATE ---
   const [contractLookup, setContractLookup] = useState({});
   const [availableClasses, setAvailableClasses] = useState([]);
+  const [events, setEvents] = useState([]);
 
   // --- REJECTION STATE ---
   const [rejectingJob, setRejectingJob] = useState(null); 
@@ -267,6 +275,19 @@ const [missions, setMissions] = useState([]);
           pending.sort((a, b) => (a.submitted_at?.seconds || 0) - (b.submitted_at?.seconds || 0));
           setSideHustleSubmissions(pending);
       });
+      return () => unsub();
+  }, []);
+
+  useEffect(() => {
+      const unsub = onSnapshot(
+          collection(db, "events"),
+          (snap) => {
+              setEvents(snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+          },
+          (error) => {
+              console.error("AdminDashboard events listener failed:", error);
+          }
+      );
       return () => unsub();
   }, []);
 
@@ -664,6 +685,26 @@ const [missions, setMissions] = useState([]);
       return Math.ceil(Number(baseCash || 0) * (1 + boostPercent / 100));
   };
 
+  const resolveEventClaims = async (activeEvents, userId) => {
+      const oneTimeEvents = getOneTimeEvents(activeEvents);
+      if (!oneTimeEvents.length) {
+          return { usableEvents: activeEvents, claimedIds: new Set() };
+      }
+      const claimSnaps = await Promise.all(
+          oneTimeEvents.map((event) =>
+              getDoc(doc(db, "users", userId, "event_claims", event.id))
+          )
+      );
+      const claimedIds = new Set();
+      claimSnaps.forEach((snap, index) => {
+          if (snap.exists()) claimedIds.add(oneTimeEvents[index].id);
+      });
+      return {
+          usableEvents: filterEventsByClaims(activeEvents, claimedIds),
+          claimedIds
+      };
+  };
+
   // --- APPROVAL ACTIONS ---
   const approveSubmission = async (job) => {
       try {
@@ -678,8 +719,23 @@ const [missions, setMissions] = useState([]);
           const userRef = doc(db, "users", job.student_id);
           const userSnap = await getDoc(userRef);
           const userData = userSnap.exists() ? userSnap.data() : {};
-          const xpAmount = getBoostedXp(baseXp, userData);
-          const cashAmount = getBoostedCurrency(payAmount, userData);
+          const boostedXp = getBoostedXp(baseXp, userData);
+          const boostedCash = getBoostedCurrency(payAmount, userData);
+          const classId = job.class_id || contractData?.class_id;
+          const activeEvents = getActiveEventsForClass(events, classId, userData?.orgId);
+          const { usableEvents } = await resolveEventClaims(activeEvents, job.student_id);
+          const eventAdjusted = applyEventRewards({
+              baseXp: boostedXp,
+              baseCurrency: boostedCash,
+              events: usableEvents,
+              eventType: "contract_stage"
+          });
+          const xpAmount = eventAdjusted.xp;
+          const cashAmount = eventAdjusted.currency;
+          const eventBonusMessage = formatEventBonusMessage({
+              bonus: eventAdjusted.bonus,
+              events: eventAdjusted.appliedEvents
+          });
 
           console.log(`Approving Stage ${currentStage}. Paying: $${cashAmount} & ${xpAmount}XP`);
 
@@ -695,6 +751,23 @@ const [missions, setMissions] = useState([]);
               xp: increment(xpAmount),        
               completed_jobs: increment(1) // Optional: counts stages as "jobs" done
           });
+          const appliedOneTimeEvents = eventAdjusted.appliedEvents.filter((event) => event.oneTimePerUser);
+          if (appliedOneTimeEvents.length) {
+              await Promise.all(
+                  appliedOneTimeEvents.map((event) =>
+                      setDoc(
+                          doc(db, "users", job.student_id, "event_claims", event.id),
+                          {
+                              eventId: event.id,
+                              title: event.title || "",
+                              eventType: "contract_stage",
+                              claimedAt: serverTimestamp()
+                          },
+                          { merge: true }
+                      )
+                  )
+              );
+          }
 
           // C. CHECK PROGRESS
           if (currentStage >= totalStages) {
@@ -708,6 +781,14 @@ const [missions, setMissions] = useState([]);
                   read: false,
                   createdAt: serverTimestamp()
               });
+              if (eventBonusMessage) {
+                  await addDoc(collection(db, "users", job.student_id, "alerts"), {
+                      type: "event_bonus",
+                      message: eventBonusMessage,
+                      read: false,
+                      createdAt: serverTimestamp()
+                  });
+              }
 
           } else {
               // --- MOVE TO NEXT STAGE ---
@@ -725,6 +806,14 @@ const [missions, setMissions] = useState([]);
                   read: false,
                   createdAt: serverTimestamp()
               });
+              if (eventBonusMessage) {
+                  await addDoc(collection(db, "users", job.student_id, "alerts"), {
+                      type: "event_bonus",
+                      message: eventBonusMessage,
+                      read: false,
+                      createdAt: serverTimestamp()
+                  });
+              }
           }
 
           // D. PUSH UPDATES TO JOB
@@ -749,13 +838,45 @@ const [missions, setMissions] = useState([]);
           const userRef = doc(db, "users", job.student_id);
           const userSnap = await getDoc(userRef);
           const userData = userSnap.exists() ? userSnap.data() : {};
-          const xpAmount = getBoostedXp(baseXp, userData);
-          const cashAmount = getBoostedCurrency(payAmount, userData);
+          const boostedXp = getBoostedXp(baseXp, userData);
+          const boostedCash = getBoostedCurrency(payAmount, userData);
+          const classId = job.class_id || hustle?.class_id;
+          const activeEvents = getActiveEventsForClass(events, classId, userData?.orgId);
+          const { usableEvents } = await resolveEventClaims(activeEvents, job.student_id);
+          const eventAdjusted = applyEventRewards({
+              baseXp: boostedXp,
+              baseCurrency: boostedCash,
+              events: usableEvents,
+              eventType: "side_hustle"
+          });
+          const xpAmount = eventAdjusted.xp;
+          const cashAmount = eventAdjusted.currency;
+          const eventBonusMessage = formatEventBonusMessage({
+              bonus: eventAdjusted.bonus,
+              events: eventAdjusted.appliedEvents
+          });
 
           await updateDoc(userRef, {
               currency: increment(Number(cashAmount) || 0),
               xp: increment(Number(xpAmount) || 0)
           });
+          const appliedOneTimeEvents = eventAdjusted.appliedEvents.filter((event) => event.oneTimePerUser);
+          if (appliedOneTimeEvents.length) {
+              await Promise.all(
+                  appliedOneTimeEvents.map((event) =>
+                      setDoc(
+                          doc(db, "users", job.student_id, "event_claims", event.id),
+                          {
+                              eventId: event.id,
+                              title: event.title || "",
+                              eventType: "side_hustle",
+                              claimedAt: serverTimestamp()
+                          },
+                          { merge: true }
+                      )
+                  )
+              );
+          }
 
           await updateDoc(doc(db, "side_hustle_jobs", job.id), {
               status: "active",
@@ -771,6 +892,14 @@ const [missions, setMissions] = useState([]);
               read: false,
               createdAt: serverTimestamp()
           });
+          if (eventBonusMessage) {
+              await addDoc(collection(db, "users", job.student_id, "alerts"), {
+                  type: "event_bonus",
+                  message: eventBonusMessage,
+                  read: false,
+                  createdAt: serverTimestamp()
+              });
+          }
       } catch (error) {
           console.error("Error approving side hustle:", error);
           alert("Error approving side hustle.");

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { db } from "../../lib/firebase";
-import { collection, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, writeBatch, arrayRemove, arrayUnion, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, writeBatch, arrayRemove, arrayUnion, getDoc, setDoc } from "firebase/firestore";
 import { CLASS_CODES } from "../../lib/gameConfig"; // <--- REMOVED "BADGES"
 import { 
     Users, Filter, Search, DollarSign, 
@@ -10,6 +10,7 @@ import AdminShell from "../../components/AdminShell";
 import { useAuth } from "../../context/AuthContext";
 import { THEME_CONFIG, resolveThemeId } from "../../lib/themeConfig";
 import { useTheme } from "../../context/ThemeContext";
+import { applyEventRewards, formatEventBonusMessage, getActiveEventsForClass, getOneTimeEvents, filterEventsByClaims } from "../../lib/eventUtils";
 
 export default function AdminRoster() {
   // --- STATE ---
@@ -20,6 +21,7 @@ export default function AdminRoster() {
   const { theme } = useTheme();
   const labels = theme.labels;
   const [classes, setClasses] = useState([]);
+  const [events, setEvents] = useState([]);
   const [filterClass, setFilterClass] = useState("all");
   const [filterDivision, setFilterDivision] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -75,12 +77,19 @@ export default function AdminRoster() {
         setClasses(classList);
     }, (error) => console.error("Classes Error:", error));
 
+    // 6. Listen to Events
+    const unsubEvents = onSnapshot(collection(db, "events"), (snap) => {
+        const eventList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setEvents(eventList);
+    }, (error) => console.error("Events Error:", error));
+
     // Cleanup all 4 listeners on unmount/logout
     return () => {
         unsubUsers();
         unsubJobs();
         unsubBadges();
         unsubClasses();
+        unsubEvents();
     };
   }, [user]); // <--- Dependency array now watches 'user'
 
@@ -105,6 +114,26 @@ export default function AdminRoster() {
     return Math.ceil(Number(baseCash || 0) * (1 + boostPercent / 100));
   };
 
+  const resolveEventClaims = async (activeEvents, userId) => {
+    const oneTimeEvents = getOneTimeEvents(activeEvents);
+    if (!oneTimeEvents.length) {
+      return { usableEvents: activeEvents, claimedIds: new Set() };
+    }
+    const claimSnaps = await Promise.all(
+      oneTimeEvents.map((event) =>
+        getDoc(doc(db, "users", userId, "event_claims", event.id))
+      )
+    );
+    const claimedIds = new Set();
+    claimSnaps.forEach((snap, index) => {
+      if (snap.exists()) claimedIds.add(oneTimeEvents[index].id);
+    });
+    return {
+      usableEvents: filterEventsByClaims(activeEvents, claimedIds),
+      claimedIds
+    };
+  };
+
   // 1. Manual Bonus
   const handleBonusSubmit = async (e) => {
     e.preventDefault();
@@ -119,14 +148,52 @@ export default function AdminRoster() {
         const userData = userSnap.exists() ? userSnap.data() : {};
         const boostedXp = getBoostedXp(xpAmount, userData);
         const boostedCash = getBoostedCurrency(currencyAmount, userData);
+        const classId = userData?.class_id || userData?.active_class_id || (Array.isArray(userData?.class_ids) ? userData.class_ids[0] : null);
+        const activeEvents = getActiveEventsForClass(events, classId, userData?.orgId);
+        const { usableEvents } = await resolveEventClaims(activeEvents, selectedStudentId);
+        const eventAdjusted = applyEventRewards({
+            baseXp: boostedXp,
+            baseCurrency: boostedCash,
+            events: usableEvents,
+            eventType: "manual_bonus"
+        });
+        const eventBonusMessage = formatEventBonusMessage({
+            bonus: eventAdjusted.bonus,
+            events: eventAdjusted.appliedEvents
+        });
 
         await updateDoc(userRef, {
-            currency: increment(boostedCash),
-            xp: increment(boostedXp)
+            currency: increment(eventAdjusted.currency),
+            xp: increment(eventAdjusted.xp)
         });
+        const appliedOneTimeEvents = eventAdjusted.appliedEvents.filter((event) => event.oneTimePerUser);
+        if (appliedOneTimeEvents.length) {
+            await Promise.all(
+                appliedOneTimeEvents.map((event) =>
+                    setDoc(
+                        doc(db, "users", selectedStudentId, "event_claims", event.id),
+                        {
+                            eventId: event.id,
+                            title: event.title || "",
+                            eventType: "manual_bonus",
+                            claimedAt: serverTimestamp()
+                        },
+                        { merge: true }
+                    )
+                )
+            );
+        }
+        if (eventBonusMessage) {
+            await addDoc(collection(db, "users", selectedStudentId, "alerts"), {
+                type: "event_bonus",
+                message: eventBonusMessage,
+                read: false,
+                createdAt: serverTimestamp()
+            });
+        }
         
         setBonusForm({ currency: 0, xp: 0 });
-        alert(`Stats updated: $${boostedCash} / ${boostedXp} ${labels.xp}`);
+        alert(`Stats updated: $${eventAdjusted.currency} / ${eventAdjusted.xp} ${labels.xp}`);
     } catch (error) {
         console.error("Error giving bonus:", error);
         alert("Failed to update stats.");
@@ -150,6 +217,19 @@ export default function AdminRoster() {
           const boostedXp = getBoostedXp(baseXp, userData);
           const cashReward = Number(badge.currencyReward || 0);
           const boostedCash = getBoostedCurrency(cashReward, userData);
+          const classId = userData?.class_id || userData?.active_class_id || (Array.isArray(userData?.class_ids) ? userData.class_ids[0] : null);
+          const activeEvents = getActiveEventsForClass(events, classId, userData?.orgId);
+          const { usableEvents } = await resolveEventClaims(activeEvents, selectedStudentId);
+          const eventAdjusted = applyEventRewards({
+              baseXp: boostedXp,
+              baseCurrency: boostedCash,
+              events: usableEvents,
+              eventType: "manual_bonus"
+          });
+          const eventBonusMessage = formatEventBonusMessage({
+              bonus: eventAdjusted.bonus,
+              events: eventAdjusted.appliedEvents
+          });
           
           // Use Dot Notation to update the Map (not an array push)
           await updateDoc(userRef, {
@@ -157,12 +237,37 @@ export default function AdminRoster() {
                   earnedAt: new Date().toISOString(),
                   title: badge.title
               },
-              xp: increment(boostedXp),
-              currency: increment(boostedCash)
+              xp: increment(eventAdjusted.xp),
+              currency: increment(eventAdjusted.currency)
           });
+          const appliedOneTimeEvents = eventAdjusted.appliedEvents.filter((event) => event.oneTimePerUser);
+          if (appliedOneTimeEvents.length) {
+              await Promise.all(
+                  appliedOneTimeEvents.map((event) =>
+                      setDoc(
+                          doc(db, "users", selectedStudentId, "event_claims", event.id),
+                          {
+                              eventId: event.id,
+                              title: event.title || "",
+                              eventType: "manual_bonus",
+                              claimedAt: serverTimestamp()
+                          },
+                          { merge: true }
+                      )
+                  )
+              );
+          }
+          if (eventBonusMessage) {
+              await addDoc(collection(db, "users", selectedStudentId, "alerts"), {
+                  type: "event_bonus",
+                  message: eventBonusMessage,
+                  read: false,
+                  createdAt: serverTimestamp()
+              });
+          }
 
           setSelectedBadgeId(""); 
-          alert(`Awarded "${badge.title}" +${boostedXp} ${labels.xp} and $${boostedCash}!`);
+          alert(`Awarded "${badge.title}" +${eventAdjusted.xp} ${labels.xp} and $${eventAdjusted.currency}!`);
       } catch (error) {
           console.error("Error awarding badge:", error);
           alert("Failed to award badge.");

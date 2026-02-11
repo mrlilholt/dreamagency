@@ -17,6 +17,7 @@ import EditContract from "./pages/admin/EditContract";
 import Leaderboard from "./pages/Leaderboard";
 import AdminRoster from "./pages/admin/AdminRoster";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
+import AdminEvents from "./pages/admin/AdminEvents";
 import AgentProfile from "./pages/AgentProfile";
 import ProcessPage from "./pages/ProcessPage"; // <--- NEW
 import ClientsPage from "./pages/ClientsPage";
@@ -97,6 +98,7 @@ function App() {
           <Route path="/admin/edit/:id" element={<EditContract />} />
           <Route path="/admin/roster" element={<AdminRoster />} />
           <Route path="/admin/analytics" element={<AdminAnalytics />} />
+          <Route path="/admin/events" element={<AdminEvents />} />
 
           {/* FALLBACK */}
           <Route path="*" element={<Navigate to="/" replace />} />

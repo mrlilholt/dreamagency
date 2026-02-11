@@ -1,11 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { LayoutDashboard, Users, FolderOpen, TrendingUp, FilePlus, LogOut, Search } from "lucide-react";
+import { LayoutDashboard, Users, FolderOpen, TrendingUp, FilePlus, LogOut, Search, Sparkles } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Dashboard Home", path: "/dashboard", icon: LayoutDashboard },
   { label: "Agent Roster", path: "/admin/roster", icon: Users },
   { label: "Contract Library", path: "/admin/contracts", icon: FolderOpen },
+  { label: "Events", path: "/admin/events", icon: Sparkles },
   { label: "Analytics", path: "/admin/analytics", icon: TrendingUp },
   { label: "New Contract", path: "/admin/create", icon: FilePlus },
 ];

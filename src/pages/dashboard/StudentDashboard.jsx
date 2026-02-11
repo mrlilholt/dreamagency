@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { db } from "../../lib/firebase";
 import {    collection, 
@@ -6,10 +6,14 @@ import {    collection,
             where, 
             onSnapshot, 
             doc, 
+            getDoc,
             getDocs, 
             updateDoc, 
             increment, 
-            arrayUnion } from "firebase/firestore"; 
+            arrayUnion,
+            addDoc,
+            serverTimestamp,
+            setDoc } from "firebase/firestore"; 
 import { 
   Briefcase, 
   DollarSign, 
@@ -31,6 +35,14 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { THEME_OPTIONS } from "../../lib/themeConfig";
 import { useTheme } from "../../context/ThemeContext";
+import { 
+  getActiveEventsForClass,
+  getActiveEventsForClasses,
+  applyEventRewards,
+  formatEventBonusMessage,
+  getOneTimeEvents,
+  filterEventsByClaims
+} from "../../lib/eventUtils";
 
 export default function StudentDashboard() {
   const { user, userData } = useAuth();
@@ -58,8 +70,11 @@ export default function StudentDashboard() {
     completed_missions: [] 
   });
 
- // --- STATE FOR CLASSES (New) ---
+  // --- STATE FOR CLASSES (New) ---
   const [allowedClasses, setAllowedClasses] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const DEFAULT_EVENT_BG = "/event-modal-default.gif";
   const boostExpiryRaw = liveUserData?.xpBoostExpiresAt;
   const boostExpiryDate = boostExpiryRaw?.toDate ? boostExpiryRaw.toDate() : boostExpiryRaw ? new Date(boostExpiryRaw) : null;
   const boostActive = boostExpiryDate && boostExpiryDate > new Date();
@@ -68,6 +83,26 @@ export default function StudentDashboard() {
   const cashBoostExpiryDate = cashBoostExpiryRaw?.toDate ? cashBoostExpiryRaw.toDate() : cashBoostExpiryRaw ? new Date(cashBoostExpiryRaw) : null;
   const cashBoostActive = cashBoostExpiryDate && cashBoostExpiryDate > new Date();
   const cashBoostPercent = Number(liveUserData?.currencyBoostPercent) || 10;
+
+  const resolveEventClaims = async (activeEvents, userId) => {
+      const oneTimeEvents = getOneTimeEvents(activeEvents);
+      if (!oneTimeEvents.length) {
+          return { usableEvents: activeEvents, claimedIds: new Set() };
+      }
+      const claimSnaps = await Promise.all(
+          oneTimeEvents.map((event) =>
+              getDoc(doc(db, "users", userId, "event_claims", event.id))
+          )
+      );
+      const claimedIds = new Set();
+      claimSnaps.forEach((snap, index) => {
+          if (snap.exists()) claimedIds.add(oneTimeEvents[index].id);
+      });
+      return {
+          usableEvents: filterEventsByClaims(activeEvents, claimedIds),
+          claimedIds
+      };
+  };
 
   // 1. LIVE LISTENER: User Profile (XP, Money, AND Classes)
   useEffect(() => {
@@ -116,6 +151,61 @@ export default function StudentDashboard() {
     );
     return () => unsub();
   }, [liveUserData?.class_id]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, "events"),
+      (snapshot) => {
+        const liveEvents = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data()
+        }));
+        setEvents(liveEvents);
+      },
+      (error) => {
+        console.error("StudentDashboard events listener failed:", error);
+      }
+    );
+
+    return () => unsub();
+  }, []);
+
+  const activeEvents = useMemo(() => {
+    const classList = allowedClasses.length > 0
+      ? allowedClasses
+      : liveUserData?.class_id
+        ? [liveUserData.class_id]
+        : [];
+    return getActiveEventsForClasses(events, classList, liveUserData?.orgId);
+  }, [events, allowedClasses, liveUserData?.class_id, liveUserData?.orgId]);
+
+  const marqueeText = useMemo(() => {
+    if (!activeEvents.length) return "";
+    return activeEvents
+      .map((event) => {
+        const title = event.title || "Special Event";
+        const marquee = event.marqueeText || "";
+        return marquee ? `${title} — ${marquee}` : title;
+      })
+      .filter(Boolean)
+      .join(" • ");
+  }, [activeEvents]);
+
+  const marqueeDollars = useMemo(() => {
+    return Array.from({ length: 12 }, (_, index) => ({
+      left: (index * 8 + 10) % 100,
+      top: (index * 17 + 20) % 100,
+      delay: (index % 6) * 0.6,
+      size: 12 + (index % 4) * 5,
+      duration: 2.6 + (index % 5) * 0.4
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (activeEvents.length > 0) {
+      setShowEventModal(true);
+    }
+  }, [activeEvents.length]);
 
   // 2. CHECK FOR DAILY MISSIONS (The Intercept)
   useEffect(() => {
@@ -285,17 +375,58 @@ export default function StudentDashboard() {
           const boostedCash = cashBoostActive
               ? Math.ceil(Number(dailyMission.reward_cash || 0) * (1 + cashBoostPercent / 100))
               : Number(dailyMission.reward_cash || 0);
+          const activeMissionEvents = getActiveEventsForClass(
+              events,
+              dailyMission.class_id,
+              liveUserData?.orgId
+          );
+          const { usableEvents } = await resolveEventClaims(activeMissionEvents, user.uid);
+          const eventAdjusted = applyEventRewards({
+              baseXp: boostedXp,
+              baseCurrency: boostedCash,
+              events: usableEvents,
+              eventType: "mission"
+          });
+          const eventBonusMessage = formatEventBonusMessage({
+              bonus: eventAdjusted.bonus,
+              events: eventAdjusted.appliedEvents
+          });
 
           await updateDoc(userRef, {
-              currency: increment(boostedCash),
-              xp: increment(boostedXp),
+              currency: increment(eventAdjusted.currency),
+              xp: increment(eventAdjusted.xp),
               completed_missions: arrayUnion(dailyMission.id) // Mark done so popup never comes back
           });
+          const appliedOneTimeEvents = eventAdjusted.appliedEvents.filter((event) => event.oneTimePerUser);
+          if (appliedOneTimeEvents.length) {
+              await Promise.all(
+                  appliedOneTimeEvents.map((event) =>
+                      setDoc(
+                          doc(db, "users", user.uid, "event_claims", event.id),
+                          {
+                              eventId: event.id,
+                              title: event.title || "",
+                              eventType: "mission",
+                              claimedAt: serverTimestamp()
+                          },
+                          { merge: true }
+                      )
+                  )
+              );
+          }
+          if (eventBonusMessage) {
+              await addDoc(collection(db, "users", user.uid, "alerts"), {
+                  type: "event_bonus",
+                  message: eventBonusMessage,
+                  read: false,
+                  createdAt: serverTimestamp()
+              });
+          }
 
           // 3. Success Animation
           setShowMissionModal(false);
           setMissionCode("");
-          alert(`MISSION COMPLETE.\n+${boostedXp} XP\n+$${boostedCash}`);
+          alert(`MISSION COMPLETE.\n+${eventAdjusted.xp} XP\n+$${eventAdjusted.currency}`);
           
       } catch (err) {
           console.error("Error claiming mission:", err);
@@ -343,6 +474,77 @@ export default function StudentDashboard() {
   return (
     <div className="min-h-screen theme-bg pb-20">
       <Navbar />
+      {activeEvents.length > 0 && (
+        <div className="event-marquee border-b border-indigo-100">
+          <div className="event-marquee-dollars">
+            {marqueeDollars.map((dollar, index) => (
+              <span
+                key={`dollar-${index}`}
+                className="event-marquee-dollar"
+                style={{
+                  left: `${dollar.left}%`,
+                  top: `${dollar.top}%`,
+                  fontSize: `${dollar.size}px`,
+                  animationDelay: `${dollar.delay}s`,
+                  animationDuration: `${dollar.duration}s`
+                }}
+              >
+                $
+              </span>
+            ))}
+          </div>
+          <div className="event-marquee-track">
+            <span className="event-marquee-text">{marqueeText}</span>
+            <span className="event-marquee-text" aria-hidden="true">{marqueeText}</span>
+          </div>
+        </div>
+      )}
+
+      {showEventModal && activeEvents.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div
+            className="w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+            style={{
+              backgroundImage: `url(${activeEvents[0]?.modalBackgroundUrl || DEFAULT_EVENT_BG})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center"
+            }}
+          >
+            <div className="p-6 md:p-8">
+              <div className="flex items-center justify-between gap-4 rounded-2xl bg-white/70 backdrop-blur-md px-5 py-4 border border-white/80 shadow-sm">
+                <div>
+                  <p className="text-xs font-bold tracking-[0.2em] text-indigo-600 uppercase">Special Event Live</p>
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 mt-2">
+                    {activeEvents[0]?.title || "Bonus Event"}
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setShowEventModal(false)}
+                  className="rounded-full border border-white/80 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-700 hover:text-slate-900 hover:border-white transition"
+                >
+                  Dismiss
+                </button>
+              </div>
+              <div className="mt-6 space-y-4">
+                {activeEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    className="rounded-xl border border-white/80 bg-white/75 backdrop-blur-md p-4 shadow-sm"
+                  >
+                    <h3 className="text-lg font-bold text-slate-900">{event.title}</h3>
+                    {event.description && (
+                      <p className="text-sm text-slate-600 mt-1">{event.description}</p>
+                    )}
+                    <p className="text-sm font-semibold text-slate-700 mt-3">
+                      {event.rewardHint || "Complete approvals during the event to earn the bonus."}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     
       <div className="max-w-6xl mx-auto p-8">
         

@@ -393,10 +393,14 @@ export default function RewardShop() {
                   {inventory.map((item, index) => (
                       (() => {
                           const shopItem = shopItemById[item.itemId];
-                          const inferredType =
-                              item.effectType ||
-                              shopItem?.effectType ||
-                              (item.xpBoostPercent ?? shopItem?.xpBoostPercent ? "xp_boost" : item.currencyBoostPercent ?? shopItem?.currencyBoostPercent ? "currency_boost" : "none");
+                          const explicitType = item.effectType && item.effectType !== "none"
+                              ? item.effectType
+                              : shopItem?.effectType && shopItem.effectType !== "none"
+                                  ? shopItem.effectType
+                                  : null;
+                          const hasXpBoost = (item.xpBoostPercent ?? shopItem?.xpBoostPercent) != null;
+                          const hasCashBoost = (item.currencyBoostPercent ?? shopItem?.currencyBoostPercent) != null;
+                          const inferredType = explicitType || (hasXpBoost ? "xp_boost" : hasCashBoost ? "currency_boost" : "none");
                           const isXpBoost = inferredType === "xp_boost";
                           const isCashBoost = inferredType === "currency_boost";
                           const boostExpiry = resolveExpiryDate(

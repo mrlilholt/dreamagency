@@ -242,15 +242,25 @@ export default function NotificationLayer() {
         snapshot.docChanges().forEach(async (change) => {
             if (change.type === "added") {
                 const data = change.doc.data();
-                
+                const isEventBonus = data.type === "event_bonus";
+                const popupConfig = isEventBonus
+                    ? {
+                        title: "SPECIAL EVENT BONUS",
+                        message: data.message,
+                        icon: <Sparkles size={32} />,
+                        color: "bg-emerald-600",
+                        type: "event_bonus"
+                    }
+                    : {
+                        title: "INCOMING TRANSMISSION",
+                        message: data.message,
+                        icon: <Zap size={32} />,
+                        color: "bg-purple-600",
+                        type: "alert"
+                    };
+
                 // 1. Trigger the Popup
-                triggerPopup({
-                    title: "INCOMING TRANSMISSION",
-                    message: data.message,
-                    icon: <Zap size={32} />,
-                    color: "bg-purple-600", 
-                    type: "alert"
-                });
+                triggerPopup(popupConfig);
 
                 // 2. Play Sound (Optional)
                 // const audio = new Audio('/ping.mp3');
