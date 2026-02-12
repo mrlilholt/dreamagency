@@ -45,7 +45,11 @@ export function AuthProvider({ children }) {
 
   // Helper functions to use throughout the app
   const login = () => signInWithPopup(auth, provider);
-  const logout = () => signOut(auth);
+  const logout = async () => {
+    await signOut(auth);
+    const target = new URL("/login", window.location.origin);
+    window.location.assign(target.toString());
+  };
 
   const value = {
     user,       // Google Auth info

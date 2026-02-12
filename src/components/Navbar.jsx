@@ -51,7 +51,7 @@ export default function Navbar() {
           {/* LEFT: BRANDING */}
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
-                <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-7 w-auto" />
+                <img src="/brand/xplabslogo.png" alt="XP Labs" className="h-9 w-9 object-cover" />
             </div>
 
             {/* CENTER: NAVIGATION LINKS */}

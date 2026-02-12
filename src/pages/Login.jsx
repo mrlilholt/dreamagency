@@ -16,8 +16,8 @@ export default function Login() {
         
         {/* Header */}
         <div className="bg-slate-900 p-8 text-center">
-          <div className="mx-auto bg-white w-20 h-20 rounded-full flex items-center justify-center mb-4 shadow-lg">
-            <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-10 w-auto" />
+          <div className="mx-auto bg-white w-20 h-20 rounded-2xl flex items-center justify-center mb-4 shadow-lg overflow-hidden">
+            <img src="/brand/xplabslogo.png" alt="XP Labs" className="h-full w-full object-cover" />
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight">XP Labs</h1>
           <p className="text-slate-400 mt-2 text-sm">Design • Research • Engineering • Art • Maker</p>

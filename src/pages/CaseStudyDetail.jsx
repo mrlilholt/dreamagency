@@ -77,7 +77,7 @@ export default function CaseStudyDetail() {
       {/* NAV */}
       <nav className="flex items-center justify-between px-6 py-6 max-w-7xl mx-auto">
         <Link to="/" className="flex items-center gap-3 font-black text-2xl tracking-tighter text-slate-900">
-          <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-8 w-auto" />
+          <img src="/brand/xplabslogo.png" alt="XP Labs" className="h-9 w-9 object-cover" />
           XP Labs
         </Link>
         <Link to="/clients" className="flex items-center gap-2 font-bold text-sm text-slate-500 hover:text-indigo-600 transition">

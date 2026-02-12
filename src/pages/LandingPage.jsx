@@ -32,7 +32,7 @@ export default function LandingPage() {
       {/* --- NAVBAR --- */}
       <nav className="flex items-center justify-between px-6 py-6 max-w-7xl mx-auto relative z-20">
         <div className="flex items-center gap-3 font-black text-2xl tracking-tighter text-slate-900">
-          <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-8 w-auto" />
+          <img src="/brand/xplabslogo.png" alt="XP Labs" className="h-9 w-9 object-cover" />
           XP Labs
         </div>
 
@@ -140,7 +140,7 @@ export default function LandingPage() {
       <footer className="bg-slate-50 border-t border-slate-200 py-12">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-3 font-black text-slate-900">
-                <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-5 w-auto" />
+                <img src="/brand/xplabslogo.png" alt="XP Labs" className="h-7 w-7 object-cover" />
                 XP Labs
             </div>
             <div className="text-slate-400 text-sm">

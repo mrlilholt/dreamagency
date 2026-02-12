@@ -29,7 +29,7 @@ export default function AdminShell({ children }) {
       <div className="flex min-h-screen">
         <aside className="relative z-50 w-16 md:w-20 bg-white/80 backdrop-blur border-r border-slate-200 flex flex-col items-center py-6 gap-6">
           <Link to="/dashboard" className="flex items-center justify-center w-10 h-10 rounded-2xl bg-slate-900 text-white font-black shadow-lg">
-            <img src="/brand/xplabslogo.svg" alt="XP Labs" className="h-5 w-5" />
+            <img src="/brand/xplabslogo.png" alt="XP Labs" className="h-7 w-7 object-cover" />
           </Link>
           <nav className="flex flex-col items-center gap-3">
             {NAV_ITEMS.map((item) => {
