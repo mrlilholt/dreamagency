@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from "./context/ThemeContext";
 import NotificationLayer from "./components/NotificationLayer";
+import InstallBanner from "./components/InstallBanner";
 
 // Pages
 import LandingPage from "./pages/LandingPage";
@@ -51,6 +52,7 @@ function App() {
       <ThemeProvider>
         <BrowserRouter>
           <NotificationLayer />
+          <InstallBanner />
           <Routes>
           
           {/* PUBLIC ROUTES */}
