@@ -23,7 +23,7 @@ import { useTheme } from "../context/ThemeContext";
 export default function SideHustleDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
   const { theme } = useTheme();
   const labels = theme.labels;
 
@@ -75,12 +75,17 @@ export default function SideHustleDetails() {
 
   const startHustle = async () => {
     if (!sideHustle || !user?.uid) return;
+    const classId = userData?.active_class_id
+      || userData?.class_id
+      || (Array.isArray(userData?.class_ids) ? userData.class_ids[0] : null);
 
     await setDoc(doc(db, "side_hustle_jobs", `${user.uid}_${id}`), {
       student_id: user.uid,
       student_name: user.displayName || user.email,
       side_hustle_id: id,
       side_hustle_title: sideHustle.title,
+      class_id: classId || null,
+      orgId: userData?.orgId || null,
       status: "active",
       current_level: 1,
       completed_count: 0,
@@ -95,12 +100,17 @@ export default function SideHustleDetails() {
 
     const currentLevel = job?.current_level || 1;
     const jobRef = doc(db, "side_hustle_jobs", `${user.uid}_${id}`);
+    const classId = userData?.active_class_id
+      || userData?.class_id
+      || (Array.isArray(userData?.class_ids) ? userData.class_ids[0] : null);
 
     await setDoc(jobRef, {
       student_id: user.uid,
       student_name: user.displayName || user.email,
       side_hustle_id: id,
       side_hustle_title: sideHustle?.title || "Side Hustle",
+      class_id: classId || null,
+      orgId: userData?.orgId || null,
       status: "pending_review",
       current_level: currentLevel,
       completed_count: job?.completed_count || 0,

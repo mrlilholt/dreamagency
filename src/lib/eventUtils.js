@@ -42,21 +42,26 @@ export const eventAppliesToClass = (event, classId, orgId) => {
   if (orgId && event.orgId && event.orgId !== orgId) return false;
   const scope = event.scope || event.classScope || (event.classId === "all" ? "all" : null);
   const normalizedScope = normalizeKey(scope);
+  const normalizedClassId = normalizeKey(classId);
   if (normalizedScope === "all" || normalizedScope === "all_classes" || normalizedScope === "all_class") {
     return true;
   }
-  if (event.classId && event.classId !== "all") return event.classId === classId;
+  if (event.classId && event.classId !== "all") {
+    return normalizeKey(event.classId) === normalizedClassId;
+  }
   const classIds = event.classIds || event.classes || event.allowedClasses;
   if (Array.isArray(classIds) && classIds.length) {
-    return classIds.includes(classId);
+    const normalizedClassIds = classIds.map(normalizeKey).filter(Boolean);
+    return normalizedClassIds.includes(normalizedClassId);
   }
   return !scope && !event.classId && !classIds;
 };
 
 export const getActiveEventsForClass = (events, classId, orgId) => {
   if (!Array.isArray(events)) return [];
+  const safeClassId = classId || "all";
   return events.filter(
-    (event) => isEventActive(event) && eventAppliesToClass(event, classId, orgId)
+    (event) => isEventActive(event) && eventAppliesToClass(event, safeClassId, orgId)
   );
 };
 
@@ -72,13 +77,37 @@ export const getActiveEventsForClasses = (events, classIds, orgId) => {
 
 export const eventAppliesToType = (event, eventType) => {
   if (!event) return false;
+  const coerceList = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return [];
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          return Array.isArray(parsed) ? parsed : [trimmed];
+        } catch {
+          return trimmed.split(",").map((entry) => entry.trim()).filter(Boolean);
+        }
+      }
+      if (trimmed.includes(",")) {
+        return trimmed.split(",").map((entry) => entry.trim()).filter(Boolean);
+      }
+      return [trimmed];
+    }
+    return [value];
+  };
+
   const appliesToRaw = Array.isArray(event.appliesToTypes)
     ? event.appliesToTypes
-    : event.appliesTo
-      ? [event.appliesTo]
-      : event.targetType
-        ? [event.targetType]
-        : [];
+    : typeof event.appliesToTypes === "string"
+      ? coerceList(event.appliesToTypes)
+      : event.appliesTo
+        ? coerceList(event.appliesTo)
+        : event.targetType
+          ? coerceList(event.targetType)
+          : [];
   const normalizedList = appliesToRaw
     .map((value) => normalizeKey(value))
     .filter(Boolean);
@@ -87,15 +116,20 @@ export const eventAppliesToType = (event, eventType) => {
     return true;
   }
   if (!eventType) return false;
-  if (normalizedList.includes("contract_stage") || normalizedList.includes("contract")) {
-    return eventType === "contract_stage";
-  }
-  if (normalizedList.includes("side_hustle") || normalizedList.includes("side_hustles")) {
-    return eventType === "side_hustle";
-  }
-  if (normalizedList.includes("mission") || normalizedList.includes("missions")) {
-    return eventType === "mission";
-  }
+  const allowsContract = normalizedList.includes("contract_stage") || normalizedList.includes("contract");
+  const allowsSideHustle = (
+    normalizedList.includes("side_hustle")
+    || normalizedList.includes("side_hustles")
+    || normalizedList.includes("side_hustle_job")
+    || normalizedList.includes("side_hustle_jobs")
+    || normalizedList.includes("side_hustle_submission")
+    || normalizedList.includes("side_hustle_submissions")
+  );
+  const allowsMission = normalizedList.includes("mission") || normalizedList.includes("missions");
+
+  if (eventType === "contract_stage" && allowsContract) return true;
+  if (eventType === "side_hustle" && allowsSideHustle) return true;
+  if (eventType === "mission" && allowsMission) return true;
   return false;
 };
 

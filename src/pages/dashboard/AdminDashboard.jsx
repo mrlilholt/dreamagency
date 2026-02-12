@@ -840,7 +840,12 @@ const [missions, setMissions] = useState([]);
           const userData = userSnap.exists() ? userSnap.data() : {};
           const boostedXp = getBoostedXp(baseXp, userData);
           const boostedCash = getBoostedCurrency(payAmount, userData);
-          const classId = job.class_id || hustle?.class_id;
+          const fallbackClassId = userData?.active_class_id
+              || userData?.class_id
+              || (Array.isArray(userData?.class_ids) ? userData.class_ids[0] : null);
+          const classId = job.class_id
+              || (hustle?.class_id === "all" ? fallbackClassId : hustle?.class_id)
+              || fallbackClassId;
           const activeEvents = getActiveEventsForClass(events, classId, userData?.orgId);
           const { usableEvents } = await resolveEventClaims(activeEvents, job.student_id);
           const eventAdjusted = applyEventRewards({
