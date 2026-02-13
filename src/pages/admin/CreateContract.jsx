@@ -7,6 +7,8 @@ import { Save, Layout, ArrowLeft, Plus, Trash } from "lucide-react";
 import { CLASS_CODES } from "../../lib/gameConfig"; 
 import AdminShell from "../../components/AdminShell";
 
+const MAX_CONTRACT_IMAGE_BYTES = 200 * 1024;
+
 export default function CreateContract() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -15,18 +17,19 @@ export default function CreateContract() {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
+    description_image_url: "",
     bounty: 500,
     xp_reward: 100,
     class_id: "all" // Default to global
   });
 
   const [stages, setStages] = useState([
-    { name: "Research & Ideate", req: "Submit 3 sketches and research links." },
-    { name: "Proposal", req: "Submit a 1-paragraph proposal." },
-    { name: "Prototype", req: "Submit photo/link of first build." },
-    { name: "Test", req: "Submit testing data/feedback notes." },
-    { name: "Iterate", req: "What changes did you make based on data?" },
-    { name: "Deliver & Reflect", req: "Final project link and reflection." }
+    { name: "Research & Ideate", req: "Submit 3 sketches and research links.", image_url: "", resources: [] },
+    { name: "Proposal", req: "Submit a 1-paragraph proposal.", image_url: "", resources: [] },
+    { name: "Prototype", req: "Submit photo/link of first build.", image_url: "", resources: [] },
+    { name: "Test", req: "Submit testing data/feedback notes.", image_url: "", resources: [] },
+    { name: "Iterate", req: "What changes did you make based on data?", image_url: "", resources: [] },
+    { name: "Deliver & Reflect", req: "Final project link and reflection.", image_url: "", resources: [] }
   ]);
 
   const handleStageChange = (index, field, value) => {
@@ -35,8 +38,98 @@ export default function CreateContract() {
     setStages(newStages);
   };
 
+  const handleBriefImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_CONTRACT_IMAGE_BYTES) {
+      alert("Image too large. Please upload a file 200KB or smaller.");
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl) return;
+      setFormData((prev) => ({ ...prev, description_image_url: dataUrl }));
+    };
+    reader.onerror = () => {
+      alert("Failed to read image file.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleStageImageChange = (index, event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_CONTRACT_IMAGE_BYTES) {
+      alert("Image too large. Please upload a file 200KB or smaller.");
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl) return;
+      setStages((prev) => {
+        const nextStages = [...prev];
+        nextStages[index] = { ...nextStages[index], image_url: dataUrl };
+        return nextStages;
+      });
+    };
+    reader.onerror = () => {
+      alert("Failed to read image file.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const addStageResource = (index) => {
+    setStages((prev) => {
+      const nextStages = [...prev];
+      const currentResources = Array.isArray(nextStages[index]?.resources)
+        ? nextStages[index].resources
+        : [];
+      nextStages[index] = {
+        ...nextStages[index],
+        resources: [...currentResources, { label: "", url: "" }]
+      };
+      return nextStages;
+    });
+  };
+
+  const updateStageResource = (stageIndex, resourceIndex, field, value) => {
+    setStages((prev) => {
+      const nextStages = [...prev];
+      const resources = Array.isArray(nextStages[stageIndex]?.resources)
+        ? [...nextStages[stageIndex].resources]
+        : [];
+      resources[resourceIndex] = {
+        ...resources[resourceIndex],
+        [field]: value
+      };
+      nextStages[stageIndex] = {
+        ...nextStages[stageIndex],
+        resources
+      };
+      return nextStages;
+    });
+  };
+
+  const removeStageResource = (stageIndex, resourceIndex) => {
+    setStages((prev) => {
+      const nextStages = [...prev];
+      const resources = Array.isArray(nextStages[stageIndex]?.resources)
+        ? nextStages[stageIndex].resources.filter((_, idx) => idx !== resourceIndex)
+        : [];
+      nextStages[stageIndex] = {
+        ...nextStages[stageIndex],
+        resources
+      };
+      return nextStages;
+    });
+  };
+
   const addStage = () => {
-    setStages([...stages, { name: "", req: "" }]);
+    setStages([...stages, { name: "", req: "", image_url: "", resources: [] }]);
   };
 
   const removeStage = (index) => {
@@ -52,9 +145,14 @@ export default function CreateContract() {
     try {
       const stagesMap = {};
       stages.forEach((stage, index) => {
+        const cleanedResources = Array.isArray(stage.resources)
+          ? stage.resources.filter((resource) => resource?.url || resource?.label)
+          : [];
         stagesMap[index + 1] = {
             name: stage.name,
             req: stage.req,
+            image_url: stage.image_url || "",
+            resources: cleanedResources,
             status: "locked" 
         };
       });
@@ -114,6 +212,32 @@ export default function CreateContract() {
                         value={formData.description}
                         onChange={(e) => setFormData({...formData, description: e.target.value})}
                     />
+                </div>
+                <div className="md:col-span-2">
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Brief Image (optional)</label>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        className="w-full border p-3 rounded-lg bg-white"
+                        onChange={handleBriefImageChange}
+                    />
+                    <p className="text-xs text-slate-500 mt-2">Keep images small (200KB max) to fit within Firestore limits.</p>
+                    {formData.description_image_url && (
+                        <div className="mt-3">
+                            <img
+                                src={formData.description_image_url}
+                                alt="Contract brief preview"
+                                className="w-full max-h-64 object-cover rounded-lg border border-slate-200"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setFormData((prev) => ({ ...prev, description_image_url: "" }))}
+                                className="mt-2 text-xs font-bold text-slate-500 hover:text-red-500"
+                            >
+                                Remove image
+                            </button>
+                        </div>
+                    )}
                 </div>
                 <div>
                     <label className="block text-sm font-bold text-slate-700 mb-2">Bounty ($)</label>
@@ -182,6 +306,73 @@ export default function CreateContract() {
                                 value={stage.req}
                                 onChange={(e) => handleStageChange(index, "req", e.target.value)}
                             />
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 mb-2">Stage Image (optional)</label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="w-full border p-2 rounded bg-white text-sm"
+                                    onChange={(event) => handleStageImageChange(index, event)}
+                                />
+                                {stage.image_url && (
+                                    <div className="mt-2">
+                                        <img
+                                            src={stage.image_url}
+                                            alt={`Stage ${index + 1} preview`}
+                                            className="w-full max-h-48 object-cover rounded-md border border-slate-200"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleStageChange(index, "image_url", "")}
+                                            className="mt-1 text-xs font-bold text-slate-500 hover:text-red-500"
+                                        >
+                                            Remove image
+                                        </button>
+                                    </div>
+                                    )}
+                            </div>
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <label className="block text-xs font-bold text-slate-500 mb-2">Stage Resources (optional)</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => addStageResource(index)}
+                                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700"
+                                    >
+                                        + Add Resource
+                                    </button>
+                                </div>
+                                {(stage.resources || []).length === 0 && (
+                                    <p className="text-xs text-slate-400">Add links, videos, or reference docs for this stage.</p>
+                                )}
+                                {(stage.resources || []).map((resource, resourceIndex) => (
+                                    <div key={resourceIndex} className="mt-2 grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
+                                        <input
+                                            className="md:col-span-2 w-full border p-2 rounded bg-white text-xs"
+                                            placeholder="Label (optional)"
+                                            value={resource.label || ""}
+                                            onChange={(event) =>
+                                                updateStageResource(index, resourceIndex, "label", event.target.value)
+                                            }
+                                        />
+                                        <input
+                                            className="md:col-span-2 w-full border p-2 rounded bg-white text-xs"
+                                            placeholder="https://"
+                                            value={resource.url || ""}
+                                            onChange={(event) =>
+                                                updateStageResource(index, resourceIndex, "url", event.target.value)
+                                            }
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeStageResource(index, resourceIndex)}
+                                            className="text-xs font-bold text-slate-400 hover:text-red-500"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                         <button 
                             type="button" 

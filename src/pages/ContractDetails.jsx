@@ -54,6 +54,41 @@ const normalizeStageMap = (stages) => {
   return null;
 };
 
+const getYouTubeVideoId = (rawUrl = "") => {
+  try {
+    const url = new URL(rawUrl);
+    if (url.hostname.includes("youtu.be")) {
+      return url.pathname.replace("/", "");
+    }
+    if (url.hostname.includes("youtube.com")) {
+      const id = url.searchParams.get("v");
+      if (id) return id;
+      const pathMatch = url.pathname.match(/\/(embed|shorts)\/([^/?]+)/);
+      return pathMatch?.[2] || "";
+    }
+  } catch (error) {
+    return "";
+  }
+  return "";
+};
+
+const getLinkMeta = (rawUrl = "") => {
+  try {
+    const url = new URL(rawUrl);
+    return {
+      href: rawUrl,
+      host: url.hostname.replace(/^www\./, ""),
+      favicon: `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(url.origin)}`
+    };
+  } catch (error) {
+    return {
+      href: rawUrl,
+      host: rawUrl,
+      favicon: ""
+    };
+  }
+};
+
 export default function ContractDetails() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -129,6 +164,8 @@ export default function ContractDetails() {
         jobStages[num] = {
             name: stageDef.name || `Stage ${num}`,
             req: stageDef.req || "",
+            image_url: stageDef.image_url || "",
+            resources: Array.isArray(stageDef.resources) ? stageDef.resources : [],
             status: index === 0 ? "active" : "locked"
         };
     });
@@ -266,6 +303,15 @@ export default function ContractDetails() {
             <div className="p-8">
                 <h3 className="font-bold theme-text mb-2">{labels.assignment} Brief</h3>
                 <p className="theme-muted leading-relaxed mb-8">{contract.description}</p>
+                {contract.description_image_url && (
+                    <div className="mb-8">
+                        <img
+                            src={contract.description_image_url}
+                            alt={`${contract.title} brief`}
+                            className="w-full max-h-96 object-cover rounded-xl border theme-border"
+                        />
+                    </div>
+                )}
 
                 {/* START BUTTON */}
                 {!isStarted && (
@@ -302,7 +348,11 @@ export default function ContractDetails() {
                             ...stageDef,
                             ...jobStage,
                             name: stageDef.name || jobStage.name || `Stage ${num}`,
-                            req: stageDef.req || jobStage.req || ""
+                            req: stageDef.req || jobStage.req || "",
+                            image_url: stageDef.image_url || jobStage.image_url || "",
+                            resources: Array.isArray(stageDef.resources || jobStage.resources)
+                                ? (stageDef.resources || jobStage.resources)
+                                : []
                         };
 
                         const isCurrent = num === currentStageNum;
@@ -346,6 +396,75 @@ export default function ContractDetails() {
                                 </div>
 
                                 <p className="text-sm theme-muted mb-4 pl-11">{stage.req}</p>
+                                {stage.image_url && (
+                                    <div className="pl-11 mb-4">
+                                        <img
+                                            src={stage.image_url}
+                                            alt={`${stage.name} reference`}
+                                            className="w-full max-h-72 object-cover rounded-lg border theme-border"
+                                        />
+                                    </div>
+                                )}
+                                {stage.resources?.length > 0 && (
+                                    <div className="pl-11 mb-4">
+                                        <p className="text-xs font-bold theme-muted uppercase mb-2">Resources</p>
+                                        <div className="space-y-3">
+                                            {stage.resources
+                                                .filter((resource) => resource?.url || resource?.label)
+                                                .map((resource, idx) => {
+                                                    const label = resource.label || resource.url || `Resource ${idx + 1}`;
+                                                    if (!resource.url) {
+                                                      return (
+                                                          <span key={`resource-label-${idx}`} className="block text-sm font-semibold theme-muted">
+                                                              {label}
+                                                          </span>
+                                                      );
+                                                    }
+
+                                                    const videoId = getYouTubeVideoId(resource.url);
+                                                    const linkMeta = getLinkMeta(resource.url);
+
+                                                    return (
+                                                        <div key={`${resource.url}-${idx}`} className="space-y-2">
+                                                            {videoId && (
+                                                                <div className="w-full aspect-video rounded-lg overflow-hidden border theme-border bg-slate-900">
+                                                                    <iframe
+                                                                        title={label}
+                                                                        className="w-full h-full"
+                                                                        src={`https://www.youtube.com/embed/${videoId}`}
+                                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                                                        allowFullScreen
+                                                                        referrerPolicy="strict-origin-when-cross-origin"
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                            <a
+                                                                href={resource.url}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="flex items-center gap-3 rounded-lg border theme-border bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:text-indigo-700 hover:border-indigo-300 transition"
+                                                            >
+                                                                {linkMeta.favicon ? (
+                                                                    <img
+                                                                        src={linkMeta.favicon}
+                                                                        alt=""
+                                                                        className="w-5 h-5 rounded-sm"
+                                                                        loading="lazy"
+                                                                    />
+                                                                ) : (
+                                                                    <span className="w-5 h-5 rounded-sm bg-slate-200" />
+                                                                )}
+                                                                <div className="min-w-0">
+                                                                    <div className="truncate">{label}</div>
+                                                                    <div className="text-xs text-slate-400 truncate">{linkMeta.host}</div>
+                                                                </div>
+                                                            </a>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    </div>
+                                )}
                                 
                                 {/* FEEDBACK DISPLAY */}
                                 {stage.feedback && (
