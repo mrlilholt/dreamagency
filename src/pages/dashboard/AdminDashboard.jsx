@@ -90,6 +90,23 @@ const formatSideHustleStatus = (status, scheduledDate) => {
     return "Dropping Soon";
 };
 
+const normalizeStageMap = (stages) => {
+    if (!stages) return null;
+    if (Array.isArray(stages)) {
+        if (stages.length === 0) return null;
+        return stages.reduce((acc, stage, index) => {
+            acc[index + 1] = { ...stage };
+            return acc;
+        }, {});
+    }
+    if (typeof stages === "object") {
+        const keys = Object.keys(stages);
+        if (keys.length === 0) return null;
+        return stages;
+    }
+    return null;
+};
+
 export default function AdminDashboard() {
   const { theme } = useTheme();
   const labels = theme?.labels || { currency: "Currency", xp: "XP", assignments: "Assignments" };
@@ -99,6 +116,8 @@ export default function AdminDashboard() {
   const [filterClass, setFilterClass] = useState("all"); 
   const [activeTab, setActiveTab] = useState("approvals"); 
     const [showLinksOnly, setShowLinksOnly] = useState(false);
+  const [expandedSubmissionIds, setExpandedSubmissionIds] = useState(() => new Set());
+  const [expandedSideHustleIds, setExpandedSideHustleIds] = useState(() => new Set());
 
   // --- LOOKUP STATE ---
   const [contractLookup, setContractLookup] = useState({});
@@ -1033,6 +1052,49 @@ const [missions, setMissions] = useState([]);
       return acc;
   }, {});
 
+  const toggleSubmissionDetails = (id) => {
+      setExpandedSubmissionIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(id)) {
+              next.delete(id);
+          } else {
+              next.add(id);
+          }
+          return next;
+      });
+  };
+
+  const toggleSideHustleDetails = (id) => {
+      setExpandedSideHustleIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(id)) {
+              next.delete(id);
+          } else {
+              next.add(id);
+          }
+          return next;
+      });
+  };
+
+  const resolveContractStageDescription = (submission) => {
+      const stageNumber = Number(submission.displayStage || submission.current_stage || 1);
+      const jobStage = submission?.stages?.[stageNumber] || submission?.stages?.[String(stageNumber)];
+      const jobReq = jobStage?.req || jobStage?.requirement || jobStage?.description;
+      if (jobReq) return jobReq;
+
+      const contract = contractLookup[submission.contract_id];
+      const stageMap = normalizeStageMap(contract?.stages);
+      const stageDef = stageMap?.[stageNumber] || stageMap?.[String(stageNumber)];
+      return stageDef?.req || stageDef?.requirement || stageDef?.description || "";
+  };
+
+  const resolveSideHustleLevelDescription = (job, hustle) => {
+      const levelNumber = Number(job.last_submitted_level || job.current_level || 1);
+      const levels = Array.isArray(hustle?.levels) ? hustle.levels : [];
+      const levelDef = levels[levelNumber - 1];
+      return levelDef?.req || levelDef?.description || "";
+  };
+
   const filteredSubmissions = submissions.map(sub => {
       // HELPER: Normalize the link so the filter AND the button see the same thing
       // We attach a 'displayLink' property to the object if it's missing, 
@@ -1272,63 +1334,91 @@ const [missions, setMissions] = useState([]);
                                     </button>
                                 </div>
                             ) : (
-                                filteredSubmissions.map(sub => (
-                                    <div key={sub.id} className="p-6 flex flex-col md:flex-row items-center justify-between gap-4 hover:bg-slate-50 transition">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <h3 className="font-bold text-slate-900 truncate text-lg">
-                                                    {sub.contract_title}
-                                                </h3>
-                                                {sub.displayLink ? (
-                                                    <a 
-                                                        href={sub.displayLink.startsWith('http') ? sub.displayLink : `https://${sub.displayLink}`} 
-                                                        target="_blank" 
-                                                        rel="noreferrer"
-                                                        className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-100 transition"
-                                                        title="View Work"
+                                filteredSubmissions.map(sub => {
+                                    const isExpanded = expandedSubmissionIds.has(sub.id);
+                                    const stageLabel = sub.displayStage || sub.current_stage || 1;
+                                    const stageDescription = resolveContractStageDescription(sub);
+
+                                    return (
+                                        <div key={sub.id} className="p-6 flex flex-col md:flex-row items-center justify-between gap-4 hover:bg-slate-50 transition">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleSubmissionDetails(sub.id)}
+                                                        className="min-w-0 font-bold text-slate-900 truncate text-lg hover:text-indigo-700 transition flex items-center gap-2 text-left"
+                                                        aria-expanded={isExpanded}
+                                                        aria-controls={`submission-desc-${sub.id}`}
                                                     >
-                                                        <ExternalLink size={14} /> View Work
-                                                    </a>
-                                                ) : (
-                                                    <span className="flex items-center gap-1 text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-1 rounded cursor-not-allowed">
-                                                        <HelpCircle size={14} /> No Link
+                                                        <span className="truncate">{sub.contract_title}</span>
+                                                        <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                                            {isExpanded ? "Hide Brief" : "Show Brief"}
+                                                        </span>
+                                                    </button>
+                                                    {sub.displayLink ? (
+                                                        <a 
+                                                            href={sub.displayLink.startsWith('http') ? sub.displayLink : `https://${sub.displayLink}`} 
+                                                            target="_blank" 
+                                                            rel="noreferrer"
+                                                            className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-100 transition"
+                                                            title="View Work"
+                                                        >
+                                                            <ExternalLink size={14} /> View Work
+                                                        </a>
+                                                    ) : (
+                                                        <span className="flex items-center gap-1 text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-1 rounded cursor-not-allowed">
+                                                            <HelpCircle size={14} /> No Link
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-sm text-slate-500 flex flex-wrap items-center gap-2">
+                                                    <span className="font-bold text-slate-700">{sub.student_name}</span>
+                                                    <span className="text-slate-300">•</span>
+                                                    <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-200">
+                                                        {contractLookup[sub.contract_id]?.classId || "Unknown Class"}
                                                     </span>
+                                                    <span className="text-slate-300">•</span>
+                                                    <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                                        Stage {stageLabel}
+                                                    </span>
+                                                    <span className="text-slate-300">•</span>
+                                                    {sub.submittedAt ? (
+                                                        <span>{new Date(sub.submittedAt.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                                    ) : (
+                                                        <span>Just now</span>
+                                                    )}
+                                                </div>
+                                                {isExpanded && (
+                                                    <div
+                                                        id={`submission-desc-${sub.id}`}
+                                                        className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                                                    >
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+                                                            Stage {stageLabel} Brief
+                                                        </p>
+                                                        <p className="text-sm text-slate-600">
+                                                            {stageDescription || "No description set for this stage."}
+                                                        </p>
+                                                    </div>
                                                 )}
                                             </div>
-                                            <div className="text-sm text-slate-500 flex flex-wrap items-center gap-2">
-                                                <span className="font-bold text-slate-700">{sub.student_name}</span>
-                                                <span className="text-slate-300">•</span>
-                                                <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-200">
-                                                    {contractLookup[sub.contract_id]?.classId || "Unknown Class"}
-                                                </span>
-                                                <span className="text-slate-300">•</span>
-                                                <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                                                    Stage {sub.displayStage}
-                                                </span>
-                                                <span className="text-slate-300">•</span>
-                                                {sub.submittedAt ? (
-                                                    <span>{new Date(sub.submittedAt.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                                ) : (
-                                                    <span>Just now</span>
-                                                )}
+                                            <div className="flex items-center gap-3 shrink-0">
+                                                <button 
+                                                    onClick={() => openRejectionModal(sub)}
+                                                    className="px-4 py-2 bg-white border border-slate-300 text-slate-600 font-bold rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition text-sm flex items-center gap-2"
+                                                >
+                                                    <AlertTriangle size={16}/> Reject
+                                                </button>
+                                                <button 
+                                                    onClick={() => approveSubmission(sub)}
+                                                    className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md hover:shadow-lg transition text-sm flex items-center gap-2"
+                                                >
+                                                    <CheckCircle size={16}/> Approve
+                                                </button>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3 shrink-0">
-                                            <button 
-                                                onClick={() => openRejectionModal(sub)}
-                                                className="px-4 py-2 bg-white border border-slate-300 text-slate-600 font-bold rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition text-sm flex items-center gap-2"
-                                            >
-                                                <AlertTriangle size={16}/> Reject
-                                            </button>
-                                            <button 
-                                                onClick={() => approveSubmission(sub)}
-                                                className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md hover:shadow-lg transition text-sm flex items-center gap-2"
-                                            >
-                                                <CheckCircle size={16}/> Approve
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </div>
@@ -1358,14 +1448,25 @@ const [missions, setMissions] = useState([]);
                                     const hustle = sideHustleLookup[job.side_hustle_id];
                                     const displayLink = job.submission_link || job.submissionLink || job.submission_url;
                                     const levelLabel = job.last_submitted_level || job.current_level || 1;
+                                    const isExpanded = expandedSideHustleIds.has(job.id);
+                                    const levelDescription = resolveSideHustleLevelDescription(job, hustle);
 
                                     return (
                                         <div key={job.id} className="p-6 flex flex-col md:flex-row items-center justify-between gap-4 hover:bg-slate-50 transition">
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <h3 className="font-bold text-slate-900 truncate text-lg">
-                                                        {job.side_hustle_title || hustle?.title || "Side Hustle"}
-                                                    </h3>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleSideHustleDetails(job.id)}
+                                                        className="min-w-0 font-bold text-slate-900 truncate text-lg hover:text-indigo-700 transition flex items-center gap-2 text-left"
+                                                        aria-expanded={isExpanded}
+                                                        aria-controls={`sidehustle-desc-${job.id}`}
+                                                    >
+                                                        <span className="truncate">{job.side_hustle_title || hustle?.title || "Side Hustle"}</span>
+                                                        <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                                            {isExpanded ? "Hide Brief" : "Show Brief"}
+                                                        </span>
+                                                    </button>
                                                     {displayLink ? (
                                                         <a
                                                             href={displayLink.startsWith('http') ? displayLink : `https://${displayLink}`}
@@ -1401,6 +1502,19 @@ const [missions, setMissions] = useState([]);
                                                         </>
                                                     )}
                                                 </div>
+                                                {isExpanded && (
+                                                    <div
+                                                        id={`sidehustle-desc-${job.id}`}
+                                                        className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                                                    >
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+                                                            Level {levelLabel} Brief
+                                                        </p>
+                                                        <p className="text-sm text-slate-600">
+                                                            {levelDescription || "No description set for this level."}
+                                                        </p>
+                                                    </div>
+                                                )}
                                                 {job.status_message && (
                                                     <p className="text-xs text-amber-600 mt-2">{job.status_message}</p>
                                                 )}
