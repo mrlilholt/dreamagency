@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { db } from "../lib/firebase";
 import { doc, onSnapshot, collection, getDocs, addDoc, serverTimestamp, updateDoc, arrayRemove } from "firebase/firestore"; // <--- Updated imports
@@ -25,6 +26,7 @@ const ICON_MAP = {
 };
 
 export default function AgentProfile() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [agentData, setAgentData] = useState(null);
   const [allBadges, setAllBadges] = useState([]); // <--- New State for Badge Library
@@ -258,6 +260,12 @@ const [panicMode, setPanicMode] = useState(false);
                     className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-white/70 hover:bg-white text-slate-700 text-xs font-bold uppercase tracking-wider rounded-full transition-all border border-slate-200 shadow-sm w-fit mx-auto lg:mx-0"
                 >
                     <Mail size={12} /> Contact HQ
+                </button>
+                <button
+                    onClick={() => navigate("/leaderboard")}
+                    className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider rounded-full transition-all border border-indigo-200 shadow-sm w-fit mx-auto lg:mx-0"
+                >
+                    <Trophy size={12} /> Leaderboard
                 </button>
             </div>
 

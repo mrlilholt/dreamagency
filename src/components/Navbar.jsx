@@ -4,7 +4,7 @@ import { useTheme } from "../context/ThemeContext";
 import { db } from "../lib/firebase"; // Added db
 import { doc, onSnapshot } from "firebase/firestore"; // Added firestore functions
 import { Link, useLocation } from "react-router-dom";
-import { Layout, Trophy, ShoppingBag, LogOut, User } from "lucide-react";
+import { Layout, ShoppingBag, LogOut, User } from "lucide-react";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -58,9 +58,6 @@ export default function Navbar() {
             <div className="hidden md:flex items-center gap-1">
                 <Link to="/dashboard" className={`px-2.5 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition ${isActive('/dashboard')}`}>
                     <Layout size={16}/> Dashboard
-                </Link>
-                <Link to="/leaderboard" className={`px-2.5 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition ${isActive('/leaderboard')}`}>
-                    <Trophy size={16}/> Leaderboard
                 </Link>
                 <Link to="/shop" className={`px-2.5 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition ${isActive('/shop')}`}>
                     <ShoppingBag size={16}/> {labels.shop}
