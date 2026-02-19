@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { db } from "../../lib/firebase";
 import { 
     doc, onSnapshot, updateDoc, arrayUnion, 
-    increment, collection, addDoc, serverTimestamp, Timestamp
+    increment, collection, addDoc, serverTimestamp, Timestamp, getDoc, setDoc
 } from "firebase/firestore"; 
 import { 
     ShoppingBag, Search, Filter, Lock, 
@@ -11,7 +11,7 @@ import {
     Smartphone, FileSignature, Monitor, Ghost,
     DollarSign, Clock, MapPin, Coffee, LifeBuoy, 
     Briefcase, PenTool, Trophy, AlertTriangle, TrendingDown,
-    Music, HelpCircle, Percent 
+    Music, Percent, X
 } from "lucide-react";
 import Navbar from "../../components/Navbar"; 
 import { useTheme } from "../../context/ThemeContext";
@@ -42,6 +42,12 @@ const ICON_MAP = {
     "dollar-sign": <DollarSign size={24} className="text-emerald-500" />
 };
 
+const EGG_BADGE_ID = "egg_hunter_2";
+const EGG_BADGE_TITLE = "Egg Hunter II";
+const EGG_BADGE_DESCRIPTION = "Found the hidden shop egg.";
+const EGG_REWARD_CURRENCY = 1000;
+const EGG_RIDDLE_ANSWER = "abracadabra";
+
 export default function RewardShop() {
   const { user } = useAuth();
   const [userData, setUserData] = useState(null);
@@ -49,6 +55,13 @@ export default function RewardShop() {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(null);
+  const [, setEggClicks] = useState(0);
+  const [showEggModal, setShowEggModal] = useState(false);
+  const [eggAnswer, setEggAnswer] = useState("");
+  const [eggError, setEggError] = useState("");
+  const [eggSolved, setEggSolved] = useState(false);
+  const [eggClaiming, setEggClaiming] = useState(false);
+  const eggClickTimeout = useRef(null);
   const { theme } = useTheme();
   const labels = theme.labels;
 
@@ -64,6 +77,18 @@ export default function RewardShop() {
     if (!rawExpiry) return null;
     return rawExpiry?.toDate ? rawExpiry.toDate() : new Date(rawExpiry);
   };
+
+  const sparkleSeeds = useMemo(() => (
+    Array.from({ length: 14 }, (_, index) => ({
+      id: index,
+      left: `${8 + (index * 13) % 85}%`,
+      top: `${10 + (index * 17) % 75}%`,
+      size: `${10 + (index % 4) * 4}px`,
+      delay: `${(index % 6) * 0.4}s`,
+      duration: `${2.8 + (index % 5) * 0.6}s`,
+      symbol: index % 2 === 0 ? "*" : "+"
+    }))
+  ), []);
 
   // --- LISTENERS ---
   useEffect(() => {
@@ -219,6 +244,90 @@ export default function RewardShop() {
       }
   };
 
+  const hasEggBadge = !!userData?.badges?.[EGG_BADGE_ID];
+
+  const handleEggTrigger = () => {
+      if (hasEggBadge) return;
+      setEggError("");
+      setEggAnswer("");
+      setEggSolved(false);
+      setEggClicks((prev) => {
+          const next = prev + 1;
+          if (next >= 5) {
+              setShowEggModal(true);
+              return 0;
+          }
+          return next;
+      });
+      if (eggClickTimeout.current) {
+          clearTimeout(eggClickTimeout.current);
+      }
+      eggClickTimeout.current = setTimeout(() => setEggClicks(0), 1200);
+  };
+
+  const handleEggUnlock = () => {
+      const normalized = eggAnswer.trim().toLowerCase();
+      if (normalized === EGG_RIDDLE_ANSWER) {
+          setEggSolved(true);
+          setEggError("");
+          return;
+      }
+      setEggSolved(false);
+      setEggError("The spell fizzles. Try again.");
+  };
+
+  const handleClaimEggReward = async () => {
+      if (eggClaiming || hasEggBadge) return;
+      setEggClaiming(true);
+      try {
+          const badgeRef = doc(db, "badges", EGG_BADGE_ID);
+          const badgeSnap = await getDoc(badgeRef);
+          if (!badgeSnap.exists()) {
+              await setDoc(badgeRef, {
+                  title: EGG_BADGE_TITLE,
+                  description: EGG_BADGE_DESCRIPTION,
+                  xpReward: 0,
+                  currencyReward: EGG_REWARD_CURRENCY,
+                  iconName: "trophy",
+                  createdAt: serverTimestamp()
+              });
+          }
+
+          await updateDoc(doc(db, "users", user.uid), {
+              [`badges.${EGG_BADGE_ID}`]: {
+                  earnedAt: new Date().toISOString(),
+                  title: EGG_BADGE_TITLE
+              },
+              currency: increment(EGG_REWARD_CURRENCY)
+          });
+
+          await addDoc(collection(db, "users", user.uid, "alerts"), {
+              type: "success",
+              message: `Egg secured! +$${EGG_REWARD_CURRENCY} and "${EGG_BADGE_TITLE}" unlocked.`,
+              read: false,
+              createdAt: serverTimestamp()
+          });
+
+          setShowEggModal(false);
+          setEggSolved(false);
+          setEggAnswer("");
+          setEggError("");
+      } catch (error) {
+          console.error("Egg reward failed:", error);
+          setEggError("Reward drop failed. Try again.");
+      } finally {
+          setEggClaiming(false);
+      }
+  };
+
+  useEffect(() => {
+      return () => {
+          if (eggClickTimeout.current) {
+              clearTimeout(eggClickTimeout.current);
+          }
+      };
+  }, []);
+
   if (loading) return <div className="p-10 text-center text-slate-400">Loading {labels.shop}...</div>;
 
   // Check if a sale is active (if any item has an original_price)
@@ -226,6 +335,18 @@ export default function RewardShop() {
 
   return (
     <div className="min-h-screen theme-bg pb-20">
+      <style>{`
+        @keyframes shop-egg-sparkle {
+          0%, 100% { opacity: 0; transform: translateY(6px) scale(0.6); }
+          40% { opacity: 0.95; transform: translateY(-6px) scale(1); }
+          70% { opacity: 0.4; transform: translateY(-12px) scale(0.8); }
+        }
+        .shop-egg-sparkle {
+          animation-name: shop-egg-sparkle;
+          animation-iteration-count: infinite;
+          animation-timing-function: ease-in-out;
+        }
+      `}</style>
       <Navbar />
 
       <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-8">
@@ -233,7 +354,7 @@ export default function RewardShop() {
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-end gap-4">
             <div>
-                <h1 className="text-3xl font-black theme-text flex items-center gap-2">
+                <h1 className="text-3xl font-black theme-text flex items-center gap-2" onClick={handleEggTrigger}>
                     <ShoppingBag className="text-indigo-600" /> {labels.shop}
                 </h1>
                 <p className="theme-muted font-medium">Spend your hard-earned {labels.currency.toLowerCase()} on real life rewards.</p>
@@ -436,6 +557,94 @@ export default function RewardShop() {
               </div>
           )}
       </div>
+
+      {showEggModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+                <div className="absolute inset-0 pointer-events-none">
+                    {sparkleSeeds.map((sparkle) => (
+                        <span
+                            key={sparkle.id}
+                            className="shop-egg-sparkle absolute text-amber-300"
+                            style={{
+                                left: sparkle.left,
+                                top: sparkle.top,
+                                fontSize: sparkle.size,
+                                animationDelay: sparkle.delay,
+                                animationDuration: sparkle.duration
+                            }}
+                        >
+                            {sparkle.symbol}
+                        </span>
+                    ))}
+                </div>
+                <div className="relative z-10">
+                    <div className="bg-slate-100/90 p-4 flex items-center justify-between border-b border-slate-200">
+                        <h3 className="font-black text-slate-700 flex items-center gap-2">
+                            <Lock size={18} className="text-indigo-600" />
+                            Arcane Checkout
+                        </h3>
+                        <button
+                            onClick={() => {
+                                setShowEggModal(false);
+                                setEggSolved(false);
+                                setEggAnswer("");
+                                setEggError("");
+                            }}
+                            className="text-slate-400 hover:text-slate-600 transition"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        {hasEggBadge ? (
+                            <div className="text-sm text-slate-600">
+                                You already claimed this drop. Keep hunting for the next egg.
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-sm text-slate-600">
+                                    Riddle of the arcane aisle: I begin every spell, I rhyme with "cadaver," and
+                                    I never end unless you say me twice. What am I?
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        value={eggAnswer}
+                                        onChange={(e) => setEggAnswer(e.target.value)}
+                                        placeholder="Whisper the word"
+                                        className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-slate-700"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleEggUnlock}
+                                        className="px-3 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-indigo-600 transition"
+                                    >
+                                        Cast
+                                    </button>
+                                </div>
+                                {eggError && (
+                                    <p className="text-xs font-bold text-red-500">{eggError}</p>
+                                )}
+                                {eggSolved && (
+                                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                                        The shopkeeper nods. Your glittering prize awaits.
+                                    </div>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={handleClaimEggReward}
+                                    disabled={!eggSolved || eggClaiming}
+                                    className="w-full py-2 rounded-lg font-bold text-sm text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                >
+                                    {eggClaiming ? "Summoning Reward..." : `Claim $${EGG_REWARD_CURRENCY} + ${EGG_BADGE_TITLE}`}
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
       </div>
     </div>
   );

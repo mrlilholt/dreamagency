@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { db } from "../../lib/firebase";
 import {    collection, 
@@ -29,7 +29,9 @@ import {
   FileText, 
   Unlock, 
   Star, 
-  X
+  X,
+  Key,
+  Sparkles
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
@@ -74,6 +76,14 @@ export default function StudentDashboard() {
   const [allowedClasses, setAllowedClasses] = useState([]);
   const [events, setEvents] = useState([]);
   const [showEventModal, setShowEventModal] = useState(false);
+  const [showEggModal, setShowEggModal] = useState(false);
+  const [eggClaiming, setEggClaiming] = useState(false);
+  const [eggError, setEggError] = useState("");
+  const [jackpotActive, setJackpotActive] = useState(false);
+  const [jackpotAmount, setJackpotAmount] = useState(0);
+  const [showJackpotModal, setShowJackpotModal] = useState(false);
+  const jackpotIntervalRef = useRef(null);
+  const jackpotReachedRef = useRef(false);
   const DEFAULT_EVENT_BG = "/event-modal-default.gif";
   const boostExpiryRaw = liveUserData?.xpBoostExpiresAt;
   const boostExpiryDate = boostExpiryRaw?.toDate ? boostExpiryRaw.toDate() : boostExpiryRaw ? new Date(boostExpiryRaw) : null;
@@ -83,6 +93,46 @@ export default function StudentDashboard() {
   const cashBoostExpiryDate = cashBoostExpiryRaw?.toDate ? cashBoostExpiryRaw.toDate() : cashBoostExpiryRaw ? new Date(cashBoostExpiryRaw) : null;
   const cashBoostActive = cashBoostExpiryDate && cashBoostExpiryDate > new Date();
   const cashBoostPercent = Number(liveUserData?.currencyBoostPercent) || 10;
+
+  const EGG_BADGE_ID = "egg_hunter_3";
+  const EGG_BADGE_TITLE = "Egg Hunter III";
+  const EGG_BADGE_DESCRIPTION = "Found the hidden dashboard key.";
+  const EGG_REWARD_CURRENCY = 1000;
+  const JACKPOT_TARGET = 100000000;
+
+  const sparkleSeeds = useMemo(() => (
+    Array.from({ length: 14 }, (_, index) => ({
+      id: index,
+      left: `${8 + (index * 13) % 85}%`,
+      top: `${10 + (index * 17) % 75}%`,
+      size: `${10 + (index % 4) * 4}px`,
+      delay: `${(index % 6) * 0.4}s`,
+      duration: `${2.8 + (index % 5) * 0.6}s`,
+      symbol: index % 2 === 0 ? "*" : "+"
+    }))
+  ), []);
+
+  const jackpotSparkles = useMemo(() => (
+    Array.from({ length: 16 }, (_, index) => ({
+      id: index,
+      left: `${5 + (index * 11) % 90}%`,
+      top: `${12 + (index * 19) % 70}%`,
+      size: `${10 + (index % 5) * 3}px`,
+      delay: `${(index % 8) * 0.2}s`,
+      duration: `${1.6 + (index % 4) * 0.4}s`,
+      symbol: index % 2 === 0 ? "✦" : "✧"
+    }))
+  ), []);
+
+  const jackpotBills = useMemo(() => (
+    Array.from({ length: 12 }, (_, index) => ({
+      id: index,
+      left: `${10 + (index * 14) % 80}%`,
+      delay: `${(index % 6) * 0.25}s`,
+      duration: `${1.8 + (index % 5) * 0.3}s`,
+      size: `${12 + (index % 3) * 4}px`
+    }))
+  ), []);
 
   const resolveEventClaims = async (activeEvents, userId) => {
       const oneTimeEvents = getOneTimeEvents(activeEvents);
@@ -103,6 +153,104 @@ export default function StudentDashboard() {
           claimedIds
       };
   };
+
+  const hasEggBadge = !!liveUserData?.badges?.[EGG_BADGE_ID];
+
+  const handleEggKeyClick = () => {
+    if (hasEggBadge) return;
+    setEggError("");
+    setShowEggModal(true);
+  };
+
+  const handleClaimEggReward = async () => {
+    if (eggClaiming || hasEggBadge || !user?.uid) return;
+    setEggClaiming(true);
+    try {
+      const badgeRef = doc(db, "badges", EGG_BADGE_ID);
+      const badgeSnap = await getDoc(badgeRef);
+      if (!badgeSnap.exists()) {
+        await setDoc(badgeRef, {
+          title: EGG_BADGE_TITLE,
+          description: EGG_BADGE_DESCRIPTION,
+          xpReward: 0,
+          currencyReward: EGG_REWARD_CURRENCY,
+          iconName: "trophy",
+          createdAt: serverTimestamp()
+        });
+      }
+
+      await updateDoc(doc(db, "users", user.uid), {
+        [`badges.${EGG_BADGE_ID}`]: {
+          earnedAt: new Date().toISOString(),
+          title: EGG_BADGE_TITLE
+        },
+        currency: increment(EGG_REWARD_CURRENCY)
+      });
+
+      await addDoc(collection(db, "users", user.uid, "alerts"), {
+        type: "success",
+        message: `Egg secured! +$${EGG_REWARD_CURRENCY} and "${EGG_BADGE_TITLE}" unlocked.`,
+        read: false,
+        createdAt: serverTimestamp()
+      });
+
+      setShowEggModal(false);
+      setEggError("");
+    } catch (error) {
+      console.error("Egg reward failed:", error);
+      setEggError("Reward drop failed. Try again.");
+    } finally {
+      setEggClaiming(false);
+    }
+  };
+
+  const displayCurrency = jackpotActive ? jackpotAmount : stats.currency;
+
+  const startJackpotSpin = () => {
+    if (jackpotActive || showJackpotModal) return;
+    jackpotReachedRef.current = false;
+    setJackpotAmount(stats.currency || 0);
+    setJackpotActive(true);
+
+    if (jackpotIntervalRef.current) {
+      clearInterval(jackpotIntervalRef.current);
+    }
+
+    jackpotIntervalRef.current = setInterval(() => {
+      setJackpotAmount((prev) => {
+        if (jackpotReachedRef.current) return prev;
+        const remaining = JACKPOT_TARGET - prev;
+        const stepBase = Math.max(50000, Math.floor(remaining / 6));
+        const jitter = Math.floor(Math.random() * 50000);
+        let next = prev + stepBase + jitter;
+        if (next >= JACKPOT_TARGET) {
+          next = JACKPOT_TARGET;
+          jackpotReachedRef.current = true;
+          if (jackpotIntervalRef.current) {
+            clearInterval(jackpotIntervalRef.current);
+            jackpotIntervalRef.current = null;
+          }
+          setTimeout(() => setShowJackpotModal(true), 500);
+        }
+        return next;
+      });
+    }, 60);
+  };
+
+  const closeJackpotModal = () => {
+    setShowJackpotModal(false);
+    setJackpotActive(false);
+    jackpotReachedRef.current = false;
+    setJackpotAmount(stats.currency || 0);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (jackpotIntervalRef.current) {
+        clearInterval(jackpotIntervalRef.current);
+      }
+    };
+  }, []);
 
   // 1. LIVE LISTENER: User Profile (XP, Money, AND Classes)
   useEffect(() => {
@@ -491,6 +639,38 @@ export default function StudentDashboard() {
 
   return (
     <div className="min-h-screen theme-bg pb-20">
+      <style>{`
+        @keyframes dashboard-egg-sparkle {
+          0%, 100% { opacity: 0; transform: translateY(6px) scale(0.6); }
+          40% { opacity: 0.95; transform: translateY(-6px) scale(1); }
+          70% { opacity: 0.4; transform: translateY(-12px) scale(0.8); }
+        }
+        .dashboard-egg-sparkle {
+          animation-name: dashboard-egg-sparkle;
+          animation-iteration-count: infinite;
+          animation-timing-function: ease-in-out;
+        }
+        @keyframes jackpot-sparkle {
+          0%, 100% { opacity: 0; transform: translateY(4px) scale(0.6); }
+          35% { opacity: 0.95; transform: translateY(-8px) scale(1); }
+          60% { opacity: 0.5; transform: translateY(-14px) scale(0.8); }
+        }
+        @keyframes jackpot-bill {
+          0% { opacity: 0; transform: translateY(10px) rotate(0deg) scale(0.9); }
+          30% { opacity: 1; }
+          100% { opacity: 0; transform: translateY(-80px) rotate(12deg) scale(1.2); }
+        }
+        .jackpot-sparkle {
+          animation-name: jackpot-sparkle;
+          animation-iteration-count: infinite;
+          animation-timing-function: ease-in-out;
+        }
+        .jackpot-bill {
+          animation-name: jackpot-bill;
+          animation-iteration-count: infinite;
+          animation-timing-function: ease-out;
+        }
+      `}</style>
       <Navbar />
       {activeEvents.length > 0 && (
         <div className="event-marquee border-b border-indigo-100">
@@ -593,9 +773,56 @@ export default function StudentDashboard() {
             
             {/* CARD 1: BANK ACCOUNT */}
             <div className="theme-surface p-6 rounded-2xl shadow-sm border theme-border flex items-center justify-between relative overflow-hidden group">
+                <button
+                    type="button"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        startJackpotSpin();
+                    }}
+                    className="absolute top-3 right-3 z-20 opacity-10 hover:opacity-70 text-amber-400 transition"
+                    title="Lucky Dollar"
+                >
+                    <DollarSign size={18} />
+                </button>
+                {jackpotActive && (
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                        {jackpotSparkles.map((sparkle) => (
+                            <span
+                                key={`sparkle-${sparkle.id}`}
+                                className="jackpot-sparkle absolute text-amber-300"
+                                style={{
+                                    left: sparkle.left,
+                                    top: sparkle.top,
+                                    fontSize: sparkle.size,
+                                    animationDelay: sparkle.delay,
+                                    animationDuration: sparkle.duration
+                                }}
+                            >
+                                {sparkle.symbol}
+                            </span>
+                        ))}
+                        {jackpotBills.map((bill) => (
+                            <span
+                                key={`bill-${bill.id}`}
+                                className="jackpot-bill absolute text-emerald-300 font-black"
+                                style={{
+                                    left: bill.left,
+                                    bottom: "8px",
+                                    fontSize: bill.size,
+                                    animationDelay: bill.delay,
+                                    animationDuration: bill.duration
+                                }}
+                            >
+                                $
+                            </span>
+                        ))}
+                    </div>
+                )}
                 <div className="relative z-10">
                     <p className="theme-muted text-xs font-bold uppercase tracking-wider mb-1">{labels.currency} Earned</p>
-                    <h2 className="text-4xl font-black theme-text">${stats.currency}</h2>
+                    <h2 className={`text-4xl font-black theme-text ${jackpotActive ? "font-mono tracking-wider" : ""}`}>
+                        ${Number(displayCurrency || 0).toLocaleString()}
+                    </h2>
                     <button 
                         onClick={() => navigate('/shop')} 
                         className="theme-accent text-sm font-bold mt-2 hover:underline flex items-center gap-1"
@@ -611,6 +838,17 @@ export default function StudentDashboard() {
 
             {/* CARD 2: XP & LEVEL */}
             <div className="theme-surface p-6 rounded-2xl shadow-sm border theme-border flex items-center justify-between relative overflow-hidden group">
+                <button
+                    type="button"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        handleEggKeyClick();
+                    }}
+                    className="absolute top-3 right-3 z-20 opacity-10 hover:opacity-70 text-amber-400 transition"
+                    title="Arcane Key"
+                >
+                    <Key size={18} />
+                </button>
                 <div className="relative z-10 w-full mr-4">
                     <div className="flex justify-between items-end mb-1">
                         <p className="theme-muted text-xs font-bold uppercase tracking-wider">{labels.xp} Progress</p>
@@ -949,6 +1187,121 @@ export default function StudentDashboard() {
 
                 </div>
             </div>
+        </div>
+      )}
+
+      {showEggModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="absolute inset-0 pointer-events-none">
+              {sparkleSeeds.map((sparkle) => (
+                <span
+                  key={sparkle.id}
+                  className="dashboard-egg-sparkle absolute text-amber-300"
+                  style={{
+                    left: sparkle.left,
+                    top: sparkle.top,
+                    fontSize: sparkle.size,
+                    animationDelay: sparkle.delay,
+                    animationDuration: sparkle.duration
+                  }}
+                >
+                  {sparkle.symbol}
+                </span>
+              ))}
+            </div>
+            <div className="relative z-10">
+              <div className="bg-slate-100/90 p-4 flex items-center justify-between border-b border-slate-200">
+                <h3 className="font-black text-slate-700 flex items-center gap-2">
+                  <Sparkles size={18} className="text-amber-500" />
+                  Vault of Curiosities
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowEggModal(false);
+                    setEggError("");
+                  }}
+                  className="text-slate-400 hover:text-slate-600 transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                {hasEggBadge ? (
+                  <div className="text-sm text-slate-600">
+                    You already claimed this drop. Keep hunting for the next egg.
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-slate-600">
+                      The hidden key unlocks a shimmering prize. Want it?
+                    </p>
+                    {eggError && (
+                      <p className="text-xs font-bold text-red-500">{eggError}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleClaimEggReward}
+                      disabled={eggClaiming}
+                      className="w-full py-2 rounded-lg font-bold text-sm text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      {eggClaiming ? "Unlocking Reward..." : `Claim $${EGG_REWARD_CURRENCY} + ${EGG_BADGE_TITLE}`}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showJackpotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="absolute inset-0 pointer-events-none">
+              {jackpotSparkles.map((sparkle) => (
+                <span
+                  key={`jackpot-modal-${sparkle.id}`}
+                  className="jackpot-sparkle absolute text-amber-300"
+                  style={{
+                    left: sparkle.left,
+                    top: sparkle.top,
+                    fontSize: sparkle.size,
+                    animationDelay: sparkle.delay,
+                    animationDuration: sparkle.duration
+                  }}
+                >
+                  {sparkle.symbol}
+                </span>
+              ))}
+            </div>
+            <div className="relative z-10">
+              <div className="bg-slate-100/90 p-4 flex items-center justify-between border-b border-slate-200">
+                <h3 className="font-black text-slate-700 flex items-center gap-2">
+                  <Sparkles size={18} className="text-amber-500" />
+                  Jackpot?
+                </h3>
+                <button
+                  onClick={closeJackpotModal}
+                  className="text-slate-400 hover:text-slate-600 transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-slate-600">
+                  Mr. Lilholt loves funny money... just kidding — no bonus cash, but nice egg find!
+                </p>
+                <button
+                  type="button"
+                  onClick={closeJackpotModal}
+                  className="w-full py-2 rounded-lg font-bold text-sm text-white bg-slate-900 hover:bg-indigo-600 transition"
+                >
+                  Back to reality
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

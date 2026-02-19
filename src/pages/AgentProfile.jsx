@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { db } from "../lib/firebase";
-import { doc, onSnapshot, collection, getDocs, addDoc, serverTimestamp, updateDoc, arrayRemove } from "firebase/firestore"; // <--- Updated imports
+import { doc, onSnapshot, collection, getDocs, addDoc, serverTimestamp, updateDoc, arrayRemove, getDoc, setDoc, increment } from "firebase/firestore"; // <--- Updated imports
 import Navbar from "../components/Navbar";
 import { 
     Shield, Lock, Calendar, Star, User, Trophy, Medal, Crown, Zap, Target, Award, Rocket, Heart, Flag, DollarSign, Mail, Send, X, Bomb,            // <--- ADD THIS
@@ -34,6 +34,18 @@ export default function AgentProfile() {
   const [showSuggestionBox, setShowSuggestionBox] = useState(false);
   const [suggestionText, setSuggestionText] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [eggStepIndex, setEggStepIndex] = useState(0);
+  const [showEggModal, setShowEggModal] = useState(false);
+  const [eggAnswer, setEggAnswer] = useState("");
+  const [eggSolved, setEggSolved] = useState(false);
+  const [eggError, setEggError] = useState("");
+  const [eggClaiming, setEggClaiming] = useState(false);
+
+  const EGG_SEQUENCE = ["bankroll", "mission", "honors"];
+  const EGG_BADGE_ID = "egg_hunter_1";
+  const EGG_BADGE_TITLE = "Egg Hunter I";
+  const EGG_BADGE_DESCRIPTION = "Found the hidden egg.";
+  const EGG_REWARD_CURRENCY = 1000;
   // --- NAME CHANGE LOGIC ---
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState("");
@@ -166,6 +178,93 @@ const [panicMode, setPanicMode] = useState(false);
   const level = Math.floor(xpTotal / 1000) + 1;
   const levelProgress = Math.min(100, Math.round(((xpTotal % 1000) / 1000) * 100));
   const xpToNext = Math.max(0, level * 1000 - xpTotal);
+  const hasEggBadge = !!agentData?.badges?.[EGG_BADGE_ID];
+
+  const handleEggStep = (step) => {
+      if (showEggModal) return;
+      setEggError("");
+      setEggAnswer("");
+      setEggSolved(false);
+      setEggStepIndex((prev) => {
+          const expected = EGG_SEQUENCE[prev];
+          if (step === expected) {
+              const next = prev + 1;
+              if (next >= EGG_SEQUENCE.length) {
+                  setShowEggModal(true);
+                  return 0;
+              }
+              return next;
+          }
+          return step === EGG_SEQUENCE[0] ? 1 : 0;
+      });
+  };
+
+  const handleEggUnlock = () => {
+      const normalized = eggAnswer.trim();
+      if (normalized === "42") {
+          setEggSolved(true);
+          setEggError("");
+          return;
+      }
+      setEggSolved(false);
+      setEggError("Nope. Check your intergalactic manual.");
+  };
+
+  const handleClaimEggReward = async () => {
+      if (eggClaiming || hasEggBadge) return;
+      setEggClaiming(true);
+      try {
+          const badgeRef = doc(db, "badges", EGG_BADGE_ID);
+          const badgeSnap = await getDoc(badgeRef);
+          if (!badgeSnap.exists()) {
+              await setDoc(badgeRef, {
+                  title: EGG_BADGE_TITLE,
+                  description: EGG_BADGE_DESCRIPTION,
+                  xpReward: 0,
+                  currencyReward: EGG_REWARD_CURRENCY,
+                  iconName: "trophy",
+                  createdAt: serverTimestamp()
+              });
+              setAllBadges((prev) => (
+                  prev.some((badge) => badge.id === EGG_BADGE_ID)
+                      ? prev
+                      : [...prev, {
+                          id: EGG_BADGE_ID,
+                          title: EGG_BADGE_TITLE,
+                          description: EGG_BADGE_DESCRIPTION,
+                          xpReward: 0,
+                          currencyReward: EGG_REWARD_CURRENCY,
+                          iconName: "trophy"
+                      }]
+              ));
+          }
+
+          await updateDoc(doc(db, "users", user.uid), {
+              [`badges.${EGG_BADGE_ID}`]: {
+                  earnedAt: new Date().toISOString(),
+                  title: EGG_BADGE_TITLE
+              },
+              currency: increment(EGG_REWARD_CURRENCY)
+          });
+
+          await addDoc(collection(db, "users", user.uid, "alerts"), {
+              type: "success",
+              message: `Egg secured! +$${EGG_REWARD_CURRENCY} and "${EGG_BADGE_TITLE}" unlocked.`,
+              read: false,
+              createdAt: serverTimestamp()
+          });
+
+          setShowEggModal(false);
+          setEggSolved(false);
+          setEggAnswer("");
+          setEggError("");
+      } catch (error) {
+          console.error("Egg reward failed:", error);
+          setEggError("Reward drop failed. Try again.");
+      } finally {
+          setEggClaiming(false);
+      }
+  };
 
   return (
     <div className="min-h-screen theme-bg pb-20">
@@ -294,7 +393,10 @@ const [panicMode, setPanicMode] = useState(false);
 
             {/* COLUMN 3: AGENT STATS */}
             <div className="grid gap-3 w-full">
-                <div className="relative bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                <div
+                    className="relative bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden"
+                    onClick={() => handleEggStep("bankroll")}
+                >
                     <div className="absolute -right-6 -bottom-6 bg-emerald-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
                     <div className="relative z-10">
                         <div className="flex items-center gap-3 mb-2 text-emerald-600">
@@ -309,10 +411,16 @@ const [panicMode, setPanicMode] = useState(false);
                     </div>
                 </div>
 
-                <div className="relative bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                <div
+                    className="relative bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden"
+                    onClick={() => handleEggStep("mission")}
+                >
                     <div className="absolute -right-6 -bottom-6 bg-blue-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all"></div>
                     <button 
-                        onClick={triggerSelfDestruct}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            triggerSelfDestruct();
+                        }}
                         className="absolute top-2 right-2 opacity-0 group-hover:opacity-20 hover:!opacity-100 transition-opacity text-red-500"
                         title="DO NOT PRESS"
                     >
@@ -331,7 +439,10 @@ const [panicMode, setPanicMode] = useState(false);
                     </div>
                 </div>
 
-                <div className="relative bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                <div
+                    className="relative bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden"
+                    onClick={() => handleEggStep("honors")}
+                >
                     <div className="absolute -right-6 -bottom-6 bg-amber-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all"></div>
                     <div className="relative z-10">
                         <div className="flex items-center gap-3 mb-2 text-amber-600">
@@ -471,6 +582,74 @@ const [panicMode, setPanicMode] = useState(false);
                     </div>
                 </form>
 
+            </div>
+        </div>
+      )}
+
+      {showEggModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+                <div className="bg-slate-100 p-4 flex items-center justify-between border-b border-slate-200">
+                    <h3 className="font-black text-slate-700 flex items-center gap-2">
+                        <Lock size={18} className="text-indigo-600" />
+                        Classified Puzzle
+                    </h3>
+                    <button
+                        onClick={() => {
+                            setShowEggModal(false);
+                            setEggSolved(false);
+                            setEggAnswer("");
+                            setEggError("");
+                        }}
+                        className="text-slate-400 hover:text-slate-600 transition"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+                <div className="p-6 space-y-4">
+                    {hasEggBadge ? (
+                        <div className="text-sm text-slate-600">
+                            You already claimed this drop. Keep hunting for the next egg.
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-sm text-slate-600">
+                                Agent, enter the answer to life, the universe, and everything.
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    value={eggAnswer}
+                                    onChange={(e) => setEggAnswer(e.target.value)}
+                                    placeholder="Enter code"
+                                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-slate-700"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleEggUnlock}
+                                    className="px-3 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-indigo-600 transition"
+                                >
+                                    Decrypt
+                                </button>
+                            </div>
+                            {eggError && (
+                                <p className="text-xs font-bold text-red-500">{eggError}</p>
+                            )}
+                            {eggSolved && (
+                                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                                    Access granted. Claim your loot, Egg Hunter.
+                                </div>
+                            )}
+                            <button
+                                type="button"
+                                onClick={handleClaimEggReward}
+                                disabled={!eggSolved || eggClaiming}
+                                className="w-full py-2 rounded-lg font-bold text-sm text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                            >
+                                {eggClaiming ? "Deploying Reward..." : `Claim $${EGG_REWARD_CURRENCY} + ${EGG_BADGE_TITLE}`}
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
       )}
