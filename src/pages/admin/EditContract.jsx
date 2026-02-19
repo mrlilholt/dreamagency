@@ -14,7 +14,14 @@ export default function EditContract() {
   
   // Initialize with empty defaults
   const [formData, setFormData] = useState({
-    title: "", description: "", description_image_url: "", bounty: 0, xp_reward: 0, class_id: "Global"
+    title: "",
+    description: "",
+    description_image_url: "",
+    bounty: 0,
+    xp_reward: 0,
+    class_id: "Global",
+    status: "live",
+    scheduled_date: ""
   });
   const [stages, setStages] = useState([]);
 
@@ -30,7 +37,9 @@ export default function EditContract() {
                 description_image_url: data.description_image_url || "",
                 bounty: data.bounty,
                 xp_reward: data.xp_reward,
-                class_id: data.class_id || "Global"
+                class_id: data.class_id || "Global",
+                status: data.status && data.status !== "open" ? data.status : "live",
+                scheduled_date: data.scheduled_date || ""
             });
             // Convert Stages Object {1:{...}, 2:{...}} back to Array for easy editing
             const stagesArray = Object.values(data.stages || {}).map((stage) => ({
@@ -46,6 +55,10 @@ export default function EditContract() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (formData.status === "scheduled" && !formData.scheduled_date) {
+      alert("Please choose a launch date for scheduled contracts.");
+      return;
+    }
     // Convert Array back to Object Map
     const stagesMap = {};
     stages.forEach((s, i) => {
@@ -60,6 +73,8 @@ export default function EditContract() {
 
     await updateDoc(doc(db, "contracts", id), {
         ...formData,
+        status: formData.status && formData.status !== "open" ? formData.status : "live",
+        scheduled_date: formData.status === "scheduled" ? formData.scheduled_date : "",
         stages: stagesMap
     });
     alert("Changes Saved!");
@@ -227,6 +242,29 @@ export default function EditContract() {
                     <label className="block font-bold mb-1">Class ID</label>
                     <input className="w-full border p-2 rounded" value={formData.class_id} onChange={e => setFormData({...formData, class_id: e.target.value})} />
                 </div>
+                <div>
+                    <label className="block font-bold mb-1">Status</label>
+                    <select
+                        className="w-full border p-2 rounded bg-white"
+                        value={formData.status || "live"}
+                        onChange={e => setFormData({ ...formData, status: e.target.value })}
+                    >
+                        <option value="live">Live</option>
+                        <option value="scheduled">Scheduled</option>
+                        <option value="archived">Archived</option>
+                    </select>
+                </div>
+                {formData.status === "scheduled" && (
+                    <div>
+                        <label className="block font-bold mb-1">Launch Date</label>
+                        <input
+                            type="date"
+                            className="w-full border p-2 rounded bg-white"
+                            value={formData.scheduled_date || ""}
+                            onChange={e => setFormData({ ...formData, scheduled_date: e.target.value })}
+                        />
+                    </div>
+                )}
             </div>
 
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">

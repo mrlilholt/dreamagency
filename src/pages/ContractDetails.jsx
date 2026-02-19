@@ -54,6 +54,11 @@ const normalizeStageMap = (stages) => {
   return null;
 };
 
+const normalizeContractStatus = (status) => {
+  if (!status || status === "open") return "live";
+  return status;
+};
+
 const getYouTubeVideoId = (rawUrl = "") => {
   try {
     const url = new URL(rawUrl);
@@ -91,7 +96,7 @@ const getLinkMeta = (rawUrl = "") => {
 
 export default function ContractDetails() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
   const navigate = useNavigate();
   const { theme } = useTheme();
   const labels = theme.labels;
@@ -206,6 +211,37 @@ export default function ContractDetails() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading Mission...</div>;
   if (!contract) return <div className="min-h-screen flex items-center justify-center">Mission Data Not Found.</div>;
+
+  const normalizedStatus = normalizeContractStatus(contract?.status);
+  const launchDate = contract?.scheduled_date ? new Date(`${contract.scheduled_date}T12:00:00`) : null;
+  const isScheduledFuture = normalizedStatus === "scheduled" && (!launchDate || launchDate > new Date());
+  const isArchived = normalizedStatus === "archived";
+  const isAdmin = userData?.role === "admin";
+
+  if (!isAdmin && (isArchived || isScheduledFuture)) {
+    const message = isArchived
+      ? "This mission has been archived."
+      : launchDate
+        ? `This mission launches on ${launchDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.`
+        : "This mission is scheduled but does not have a launch date yet.";
+    return (
+      <div className="min-h-screen theme-bg pb-20">
+        <Navbar />
+        <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-10">
+            <h1 className="text-2xl font-black text-slate-900 mb-3">Mission Offline</h1>
+            <p className="text-slate-600 mb-6">{message}</p>
+            <button
+              onClick={() => navigate("/dashboard")}
+              className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-bold hover:bg-indigo-600 transition"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const isStarted = !!activeJob;
   const currentStageNum = activeJob?.current_stage || 1;

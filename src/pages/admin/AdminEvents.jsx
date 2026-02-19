@@ -9,7 +9,7 @@ import {
   Timestamp,
   updateDoc
 } from "firebase/firestore";
-import { CalendarClock, Sparkles, Wand2, ToggleLeft, ToggleRight } from "lucide-react";
+import { CalendarClock, Sparkles, Wand2, ToggleLeft, ToggleRight, Copy } from "lucide-react";
 import AdminShell from "../../components/AdminShell";
 import { useAuth } from "../../context/AuthContext";
 import { isEventActive, parseEventDate } from "../../lib/eventUtils";
@@ -263,6 +263,32 @@ export default function AdminEvents() {
         : [event.appliesTo || "all_submissions"],
       oneTimePerUser: !!event.oneTimePerUser,
       enabled: event.enabled !== false,
+      startAt: formatDateTimeLocal(event.startAt),
+      endAt: formatDateTimeLocal(event.endAt),
+      xpMultiplierPercent: event.xpMultiplierPercent || 0,
+      currencyMultiplierPercent: event.currencyMultiplierPercent || 0,
+      flatCurrencyBonus: event.flatCurrencyBonus || 0,
+      randomCurrencyBonusMin: event.randomCurrencyBonusMin || 0,
+      randomCurrencyBonusMax: event.randomCurrencyBonusMax || 0
+    });
+    setModalBackground(event.modalBackgroundUrl || "");
+  };
+
+  const handleDuplicate = (event) => {
+    setEditingId(null);
+    setForm({
+      title: event.title ? `${event.title} (Copy)` : "",
+      description: event.description || "",
+      rewardHint: event.rewardHint || "",
+      marqueeText: event.marqueeText || "",
+      scope: event.scope || "all",
+      classIds: event.classIds || [],
+      modalBackgroundUrl: event.modalBackgroundUrl || "",
+      appliesToTypes: Array.isArray(event.appliesToTypes) && event.appliesToTypes.length
+        ? event.appliesToTypes
+        : [event.appliesTo || "all_submissions"],
+      oneTimePerUser: !!event.oneTimePerUser,
+      enabled: false,
       startAt: formatDateTimeLocal(event.startAt),
       endAt: formatDateTimeLocal(event.endAt),
       xpMultiplierPercent: event.xpMultiplierPercent || 0,
@@ -680,12 +706,20 @@ export default function AdminEvents() {
                       })()}
                     </div>
                     <div className="mt-4 flex items-center justify-between gap-3">
-                      <button
-                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
-                        onClick={() => handleEdit(event)}
-                      >
-                        Edit
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                          onClick={() => handleEdit(event)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="text-xs font-semibold text-slate-500 hover:text-slate-700 flex items-center gap-1"
+                          onClick={() => handleDuplicate(event)}
+                        >
+                          <Copy size={14} /> Duplicate
+                        </button>
+                      </div>
                       <button
                         className="text-xs font-semibold text-slate-500 hover:text-slate-700 flex items-center gap-1"
                         onClick={() => toggleEnabled(event)}

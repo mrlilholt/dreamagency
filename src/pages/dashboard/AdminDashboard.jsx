@@ -40,6 +40,7 @@ import {
     History,
     Archive,
     ArrowRight,
+    Copy,
 } from "lucide-react";
 import AdminShell from "../../components/AdminShell";
 import { CLASS_CODES } from "../../lib/gameConfig";
@@ -163,6 +164,7 @@ const [missions, setMissions] = useState([]);
   const [sideHustleSubmissions, setSideHustleSubmissions] = useState([]);
   const [showSideHustleEditor, setShowSideHustleEditor] = useState(false);
   const [editingSideHustleId, setEditingSideHustleId] = useState(null);
+  const [sideHustleSection, setSideHustleSection] = useState("live");
   const [sideHustleForm, setSideHustleForm] = useState({
       title: "",
       tagline: "",
@@ -208,6 +210,20 @@ const [missions, setMissions] = useState([]);
       });
       // Optional: Flash a message or focus the form
       // alert("Mission loaded into form! Adjust Date/Class and Deploy.");
+  };
+
+  const handleDuplicateMission = (mission) => {
+      setNewMission({
+          title: mission.title ? `${mission.title} (Copy)` : "",
+          instruction: mission.instruction,
+          code_word: mission.code_word || "",
+          reward_xp: mission.reward_xp,
+          reward_cash: mission.reward_cash,
+          class_id: mission.class_id,
+          active_date: mission.active_date || todayDate
+      });
+      setEditingMissionId(null);
+      setShowDailyMissions(true);
   };
   const [newMission, setNewMission] = useState({
       title: "",
@@ -504,6 +520,168 @@ const [missions, setMissions] = useState([]);
       setEditingSideHustleId(hustle.id);
       setShowSideHustleEditor(true);
   };
+
+  const handleDuplicateSideHustle = (hustle) => {
+      if (sideHustleImagePreview?.startsWith("blob:")) {
+          URL.revokeObjectURL(sideHustleImagePreview);
+      }
+      setSideHustleForm({
+          title: hustle.title ? `${hustle.title} (Copy)` : "",
+          tagline: hustle.tagline || "",
+          summary: hustle.summary || "",
+          details: hustle.details || "",
+          reward_cash: hustle.reward_cash || 0,
+          reward_xp: hustle.reward_xp || 0,
+          class_id: hustle.class_id || "all",
+          image_url: hustle.image_url || "",
+          status: "archived",
+          scheduled_date: hustle.scheduled_date || ""
+      });
+      setSideHustleImagePreview(hustle.image_url || "");
+      setSideHustleLevels(
+          Array.isArray(hustle.levels) && hustle.levels.length > 0
+              ? hustle.levels.map((level, index) => ({
+                  title: level.title || `Level ${index + 1}`,
+                  req: level.req || "",
+                  reward_cash: level.reward_cash ?? getAutoLevelRewards(index + 1).reward_cash,
+                  reward_xp: level.reward_xp ?? getAutoLevelRewards(index + 1).reward_xp
+              }))
+              : [{
+                  title: "Level 1",
+                  req: "",
+                  ...getAutoLevelRewards(1)
+              }]
+      );
+      setEditingSideHustleId(null);
+      setShowSideHustleEditor(true);
+  };
+
+  const sortHustlesByTitle = (a, b) => (a.title || "").localeCompare(b.title || "");
+  const sortHustlesBySchedule = (a, b) => {
+      const dateA = a.scheduled_date || "";
+      const dateB = b.scheduled_date || "";
+      if (dateA && dateB) return dateA.localeCompare(dateB);
+      if (dateA) return -1;
+      if (dateB) return 1;
+      return sortHustlesByTitle(a, b);
+  };
+
+  const liveHustles = sideHustles
+      .filter((hustle) => hustle.status !== "archived" && hustle.status !== "scheduled")
+      .sort(sortHustlesByTitle);
+  const scheduledHustles = sideHustles
+      .filter((hustle) => hustle.status === "scheduled")
+      .sort(sortHustlesBySchedule);
+  const archivedHustles = sideHustles
+      .filter((hustle) => hustle.status === "archived")
+      .sort(sortHustlesByTitle);
+
+  const sideHustleSections = {
+      live: {
+          label: "Live",
+          accent: "text-emerald-600",
+          empty: "No live side hustles.",
+          list: liveHustles
+      },
+      scheduled: {
+          label: "Dropping Soon",
+          accent: "text-amber-600",
+          empty: "No scheduled side hustles.",
+          list: scheduledHustles
+      },
+      archived: {
+          label: "Archived",
+          accent: "text-slate-500",
+          empty: "No archived side hustles.",
+          list: archivedHustles
+      }
+  };
+
+  const activeSideHustleSection = sideHustleSections[sideHustleSection] || sideHustleSections.live;
+
+  const renderHustleCard = (hustle) => (
+      <div key={hustle.id} className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between">
+          <div>
+              <div className="flex items-start justify-between gap-2">
+                  <div>
+                      <p className="text-sm font-bold text-slate-800">{hustle.title}</p>
+                      <p className="text-[10px] text-slate-400 uppercase">{hustle.class_id || "all"}</p>
+                  </div>
+                  <div className="text-xs font-bold text-slate-500 text-right">
+                      ${hustle.reward_cash} • {hustle.reward_xp} XP
+                      <div className="text-[10px] uppercase text-slate-400 mt-1">
+                          {formatSideHustleStatus(hustle.status, hustle.scheduled_date)}
+                      </div>
+                  </div>
+              </div>
+              {hustle.summary && (
+                  <p className="text-xs text-slate-500 mt-2 line-clamp-2">{hustle.summary}</p>
+              )}
+          </div>
+          <div className="flex items-center justify-between mt-4">
+              <span className="text-[10px] text-slate-400">
+                  {Array.isArray(hustle.levels) ? hustle.levels.length : 0} levels
+              </span>
+              <div className="flex items-center gap-2">
+                  {hustle.status === "archived" ? (
+                      <button
+                          type="button"
+                          onClick={async () => {
+                              try {
+                                  await updateDoc(doc(db, "side_hustles", hustle.id), { status: "live" });
+                              } catch (error) {
+                                  console.error("Failed to restore side hustle:", error);
+                              }
+                          }}
+                          className="text-slate-400 hover:text-emerald-600 p-2 rounded-lg hover:bg-emerald-50 transition text-xs font-bold"
+                          title="Restore"
+                      >
+                          Restore
+                      </button>
+                  ) : (
+                      <button
+                          type="button"
+                          onClick={async () => {
+                              try {
+                                  await updateDoc(doc(db, "side_hustles", hustle.id), { status: "archived" });
+                              } catch (error) {
+                                  console.error("Failed to archive side hustle:", error);
+                              }
+                          }}
+                          className="text-slate-400 hover:text-slate-900 p-2 rounded-lg hover:bg-slate-100 transition text-xs font-bold"
+                          title="Archive"
+                      >
+                          Archive
+                      </button>
+                  )}
+                  <button
+                      type="button"
+                      onClick={() => handleEditSideHustle(hustle)}
+                      className="text-slate-400 hover:text-amber-600 p-2 rounded-lg hover:bg-amber-50 transition"
+                      title="Edit"
+                  >
+                      <Pencil size={16} />
+                  </button>
+                  <button
+                      type="button"
+                      onClick={() => handleDuplicateSideHustle(hustle)}
+                      className="text-slate-400 hover:text-indigo-600 p-2 rounded-lg hover:bg-indigo-50 transition"
+                      title="Duplicate"
+                  >
+                      <Copy size={16} />
+                  </button>
+                  <button
+                      type="button"
+                      onClick={() => handleDeleteSideHustle(hustle.id)}
+                      className="text-slate-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition"
+                      title="Delete"
+                  >
+                      <Trash2 size={16} />
+                  </button>
+              </div>
+          </div>
+      </div>
+  );
 
   const handleDeleteSideHustle = async (id) => {
       if (!confirm("Delete this side hustle?")) return;
@@ -2276,7 +2454,7 @@ const [missions, setMissions] = useState([]);
                         {/* RIGHT: LIVE LIST */}
                         <div className="lg:col-span-2">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-xs font-bold uppercase text-slate-400">All Hustles</h3>
+                                <h3 className="text-xs font-bold uppercase text-slate-400">Side Hustle Library</h3>
                                 <span className="text-xs text-slate-400">{sideHustles.length} total</span>
                             </div>
                             {sideHustles.length === 0 ? (
@@ -2284,82 +2462,41 @@ const [missions, setMissions] = useState([]);
                                     No side hustles yet.
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {sideHustles.map((hustle) => (
-                                        <div key={hustle.id} className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between">
-                                            <div>
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div>
-                                                        <p className="text-sm font-bold text-slate-800">{hustle.title}</p>
-                                                        <p className="text-[10px] text-slate-400 uppercase">{hustle.class_id || "all"}</p>
-                                                    </div>
-                                            <div className="text-xs font-bold text-slate-500 text-right">
-                                                        ${hustle.reward_cash} • {hustle.reward_xp} XP
-                                                        <div className="text-[10px] uppercase text-slate-400 mt-1">
-                                                            {formatSideHustleStatus(hustle.status, hustle.scheduled_date)}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                {hustle.summary && (
-                                                    <p className="text-xs text-slate-500 mt-2 line-clamp-2">{hustle.summary}</p>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center justify-between mt-4">
-                                                <span className="text-[10px] text-slate-400">
-                                                    {Array.isArray(hustle.levels) ? hustle.levels.length : 0} levels
-                                                </span>
-                                                <div className="flex items-center gap-2">
-                                                    {hustle.status === "archived" ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={async () => {
-                                                                try {
-                                                                    await updateDoc(doc(db, "side_hustles", hustle.id), { status: "live" });
-                                                                } catch (error) {
-                                                                    console.error("Failed to restore side hustle:", error);
-                                                                }
-                                                            }}
-                                                            className="text-slate-400 hover:text-emerald-600 p-2 rounded-lg hover:bg-emerald-50 transition text-xs font-bold"
-                                                            title="Restore"
-                                                        >
-                                                            Restore
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            type="button"
-                                                            onClick={async () => {
-                                                                try {
-                                                                    await updateDoc(doc(db, "side_hustles", hustle.id), { status: "archived" });
-                                                                } catch (error) {
-                                                                    console.error("Failed to archive side hustle:", error);
-                                                                }
-                                                            }}
-                                                            className="text-slate-400 hover:text-slate-900 p-2 rounded-lg hover:bg-slate-100 transition text-xs font-bold"
-                                                            title="Archive"
-                                                        >
-                                                            Archive
-                                                        </button>
-                                                    )}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleEditSideHustle(hustle)}
-                                                        className="text-slate-400 hover:text-amber-600 p-2 rounded-lg hover:bg-amber-50 transition"
-                                                        title="Edit"
-                                                    >
-                                                        <Pencil size={16} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteSideHustle(hustle.id)}
-                                                        className="text-slate-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition"
-                                                        title="Delete"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            </div>
+                                <div className="space-y-4">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {Object.entries(sideHustleSections).map(([key, section]) => (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                onClick={() => setSideHustleSection(key)}
+                                                className={`px-3 py-1.5 rounded-full text-xs font-bold transition border ${
+                                                    sideHustleSection === key
+                                                        ? "bg-slate-900 text-white border-slate-900"
+                                                        : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700"
+                                                }`}
+                                            >
+                                                {section.label} ({section.list.length})
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h4 className={`text-xs font-bold uppercase ${activeSideHustleSection.accent}`}>
+                                                {activeSideHustleSection.label}
+                                            </h4>
+                                            <span className="text-xs text-slate-400">{activeSideHustleSection.list.length} total</span>
                                         </div>
-                                    ))}
+                                        {activeSideHustleSection.list.length === 0 ? (
+                                            <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl text-slate-400 text-sm">
+                                                {activeSideHustleSection.empty}
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {activeSideHustleSection.list.map(renderHustleCard)}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -2594,6 +2731,14 @@ const [missions, setMissions] = useState([]);
                                             title="Edit Mission"
                                         >
                                             <Pencil size={16} />
+                                        </button>
+
+                                        <button
+                                            onClick={() => handleDuplicateMission(m)}
+                                            className="text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition"
+                                            title="Duplicate Mission"
+                                        >
+                                            <Copy size={16} />
                                         </button>
 
                                         {/* Recycle Button (Only in Archive) */}

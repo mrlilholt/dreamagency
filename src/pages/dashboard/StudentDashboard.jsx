@@ -257,9 +257,7 @@ export default function StudentDashboard() {
         q,
         (snapshot) => {
             const liveContracts = snapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                // Filter for "open" status here (Safest way to avoid Index errors)
-                .filter(job => job.status === "open");
+                .map(doc => ({ id: doc.id, ...doc.data() }));
 
             setContracts(liveContracts);
         },
@@ -434,7 +432,24 @@ export default function StudentDashboard() {
       }
   };
 
-// --- 🛡️ THE GATEKEEPER LOGIC 🛡️ ---
+  const normalizeContractStatus = (status) => {
+    if (!status || status === "open") return "live";
+    return status;
+  };
+
+  const isContractLiveForStudents = (contract) => {
+    const status = normalizeContractStatus(contract?.status);
+    if (status === "archived") return false;
+    if (status === "scheduled") {
+      if (!contract?.scheduled_date) return false;
+      const launchDate = new Date(`${contract.scheduled_date}T12:00:00`);
+      if (Number.isNaN(launchDate.getTime())) return false;
+      return launchDate <= new Date();
+    }
+    return true;
+  };
+
+  // --- 🛡️ THE GATEKEEPER LOGIC 🛡️ ---
   // This filters the raw "contracts" list before we map over it
   const visibleContracts = contracts.filter(contract => {
     // 1. Admins see EVERYTHING
@@ -442,7 +457,10 @@ export default function StudentDashboard() {
 
     // 2. Students see contracts if they are in the 'allowedClasses' list
     // (We use the state we built earlier, rather than the single userData.class_id)
-    return allowedClasses.includes(contract.class_id);
+    if (!allowedClasses.includes(contract.class_id)) return false;
+
+    // 3. Students only see live contracts (scheduled launches stay hidden)
+    return isContractLiveForStudents(contract);
   });
 
   // --- LEVEL CALCULATIONS ---

@@ -5,7 +5,7 @@ import { collection, getDocs, deleteDoc, doc, addDoc, updateDoc } from "firebase
 import { 
     Folder, Edit, Trash, Plus, Trophy, Medal, Shield, 
     Star, Crown, Zap, Target, Award, Rocket, Bookmark,
-    Hexagon, Heart, Flag, Lock
+    Hexagon, Heart, Flag, Lock, Copy, Archive, RotateCcw
 } from "lucide-react";
 import AdminShell from "../../components/AdminShell";
 
@@ -69,6 +69,32 @@ export default function AllContracts() {
     if (!confirm("Delete this contract forever?")) return;
     await deleteDoc(doc(db, "contracts", id));
     fetchData(); 
+  };
+
+  const normalizeContractStatus = (status) => {
+    if (!status || status === "open") return "live";
+    return status;
+  };
+
+  const formatScheduledDate = (rawDate) => {
+    if (!rawDate) return "";
+    const parsed = new Date(`${rawDate}T12:00:00`);
+    if (Number.isNaN(parsed.getTime())) return rawDate;
+    return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  const handleDuplicateContract = (contract) => {
+    navigate("/admin/create", { state: { duplicateContract: contract } });
+  };
+
+  const handleToggleContractArchive = async (contract) => {
+    const currentStatus = normalizeContractStatus(contract.status);
+    const nextStatus = currentStatus === "archived" ? "live" : "archived";
+    await updateDoc(doc(db, "contracts", contract.id), {
+      status: nextStatus,
+      scheduled_date: nextStatus === "scheduled" ? contract.scheduled_date || "" : ""
+    });
+    fetchData();
   };
 
   // --- BADGE ACTIONS ---
@@ -161,33 +187,69 @@ export default function AllContracts() {
                             </div>
                             
                             <div className="divide-y divide-slate-100">
-                                {contracts[group].map(contract => (
-                                    <div key={contract.id} className="p-4 hover:bg-slate-50 flex items-center justify-between group">
-                                        <div>
-                                            <h3 className="font-bold text-slate-800">{contract.title}</h3>
-                                            <div className="flex gap-3 text-xs font-bold mt-1">
-                                                <span className="text-green-600">${contract.bounty}</span>
-                                                <span className="text-slate-300">•</span>
-                                                <span className="text-indigo-500">{contract.xp_reward} XP</span>
+                                {contracts[group].map(contract => {
+                                    const status = normalizeContractStatus(contract.status);
+                                    const scheduledLabel = status === "scheduled" ? formatScheduledDate(contract.scheduled_date) : "";
+                                    const statusBadge = status === "archived"
+                                        ? "bg-slate-200 text-slate-600"
+                                        : status === "scheduled"
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-emerald-100 text-emerald-700";
+
+                                    return (
+                                        <div key={contract.id} className="p-4 hover:bg-slate-50 flex items-center justify-between group">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="font-bold text-slate-800 truncate">{contract.title}</h3>
+                                                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${statusBadge}`}>
+                                                        {status}
+                                                    </span>
+                                                    {scheduledLabel && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600">
+                                                            {scheduledLabel}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-3 text-xs font-bold mt-1">
+                                                    <span className="text-green-600">${contract.bounty}</span>
+                                                    <span className="text-slate-300">•</span>
+                                                    <span className="text-indigo-500">{contract.xp_reward} XP</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button 
+                                                    onClick={() => handleDuplicateContract(contract)}
+                                                    className="p-2 bg-slate-50 text-slate-500 rounded-lg hover:bg-slate-100"
+                                                    title="Duplicate"
+                                                >
+                                                    <Copy size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleToggleContractArchive(contract)}
+                                                    className="p-2 bg-slate-50 text-slate-500 rounded-lg hover:bg-slate-100"
+                                                    title={status === "archived" ? "Restore" : "Archive"}
+                                                >
+                                                    {status === "archived" ? <RotateCcw size={16} /> : <Archive size={16} />}
+                                                </button>
+                                                <button 
+                                                    onClick={() => navigate(`/admin/edit/${contract.id}`)}
+                                                    className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100"
+                                                    title="Edit"
+                                                >
+                                                    <Edit size={16} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDeleteContract(contract.id)}
+                                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
+                                                    title="Delete"
+                                                >
+                                                    <Trash size={16} />
+                                                </button>
                                             </div>
                                         </div>
-
-                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button 
-                                                onClick={() => navigate(`/admin/edit/${contract.id}`)}
-                                                className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100"
-                                            >
-                                                <Edit size={16} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDeleteContract(contract.id)}
-                                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
-                                            >
-                                                <Trash size={16} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     ))}

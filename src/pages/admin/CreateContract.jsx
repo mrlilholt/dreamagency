@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { db } from "../../lib/firebase"; 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Save, Layout, ArrowLeft, Plus, Trash } from "lucide-react";
 // 1. Import your config
 import { CLASS_CODES } from "../../lib/gameConfig"; 
@@ -9,8 +9,32 @@ import AdminShell from "../../components/AdminShell";
 
 const MAX_CONTRACT_IMAGE_BYTES = 200 * 1024;
 
+const DEFAULT_STAGES = [
+  { name: "Research & Ideate", req: "Submit 3 sketches and research links.", image_url: "", resources: [] },
+  { name: "Proposal", req: "Submit a 1-paragraph proposal.", image_url: "", resources: [] },
+  { name: "Prototype", req: "Submit photo/link of first build.", image_url: "", resources: [] },
+  { name: "Test", req: "Submit testing data/feedback notes.", image_url: "", resources: [] },
+  { name: "Iterate", req: "What changes did you make based on data?", image_url: "", resources: [] },
+  { name: "Deliver & Reflect", req: "Final project link and reflection.", image_url: "", resources: [] }
+];
+
+const normalizeStageList = (stages) => {
+  if (!stages) return [];
+  if (Array.isArray(stages)) return stages;
+  if (typeof stages === "object") return Object.values(stages);
+  return [];
+};
+
+const cloneStageList = (stages) => stages.map((stage) => ({
+  name: stage.name || "",
+  req: stage.req || "",
+  image_url: stage.image_url || "",
+  resources: Array.isArray(stage.resources) ? stage.resources : []
+}));
+
 export default function CreateContract() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
 
   // Form State
@@ -20,17 +44,29 @@ export default function CreateContract() {
     description_image_url: "",
     bounty: 500,
     xp_reward: 100,
-    class_id: "all" // Default to global
+    class_id: "all", // Default to global
+    status: "live",
+    scheduled_date: ""
   });
 
-  const [stages, setStages] = useState([
-    { name: "Research & Ideate", req: "Submit 3 sketches and research links.", image_url: "", resources: [] },
-    { name: "Proposal", req: "Submit a 1-paragraph proposal.", image_url: "", resources: [] },
-    { name: "Prototype", req: "Submit photo/link of first build.", image_url: "", resources: [] },
-    { name: "Test", req: "Submit testing data/feedback notes.", image_url: "", resources: [] },
-    { name: "Iterate", req: "What changes did you make based on data?", image_url: "", resources: [] },
-    { name: "Deliver & Reflect", req: "Final project link and reflection.", image_url: "", resources: [] }
-  ]);
+  const [stages, setStages] = useState(() => cloneStageList(DEFAULT_STAGES));
+
+  useEffect(() => {
+    const duplicate = location.state?.duplicateContract;
+    if (!duplicate) return;
+    const stageList = normalizeStageList(duplicate.stages);
+    setFormData({
+      title: duplicate.title ? `${duplicate.title} (Copy)` : "",
+      description: duplicate.description || "",
+      description_image_url: duplicate.description_image_url || "",
+      bounty: Number(duplicate.bounty) || 0,
+      xp_reward: Number(duplicate.xp_reward) || 0,
+      class_id: duplicate.class_id || "all",
+      status: duplicate.status && duplicate.status !== "open" ? duplicate.status : "archived",
+      scheduled_date: duplicate.scheduled_date || ""
+    });
+    setStages(stageList.length ? cloneStageList(stageList) : cloneStageList(DEFAULT_STAGES));
+  }, [location.state]);
 
   const handleStageChange = (index, field, value) => {
     const newStages = [...stages];
@@ -140,6 +176,10 @@ export default function CreateContract() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formData.status === "scheduled" && !formData.scheduled_date) {
+      alert("Please choose a launch date for scheduled contracts.");
+      return;
+    }
     setLoading(true);
 
     try {
@@ -160,7 +200,8 @@ export default function CreateContract() {
       await addDoc(collection(db, "contracts"), {
         ...formData,
         stages: stagesMap,
-        status: "open",
+        status: formData.status && formData.status !== "open" ? formData.status : "live",
+        scheduled_date: formData.status === "scheduled" ? formData.scheduled_date : "",
         created_at: serverTimestamp()
       });
 
@@ -274,6 +315,29 @@ export default function CreateContract() {
                         ))}
                     </select>
                 </div>
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Status</label>
+                    <select
+                        className="w-full border p-3 rounded-lg bg-white"
+                        value={formData.status || "live"}
+                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    >
+                        <option value="live">Live</option>
+                        <option value="scheduled">Scheduled</option>
+                        <option value="archived">Archived</option>
+                    </select>
+                </div>
+                {formData.status === "scheduled" && (
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Launch Date</label>
+                        <input
+                            type="date"
+                            className="w-full border p-3 rounded-lg bg-white"
+                            value={formData.scheduled_date || ""}
+                            onChange={(e) => setFormData({ ...formData, scheduled_date: e.target.value })}
+                        />
+                    </div>
+                )}
 
             </div>
         </div>
