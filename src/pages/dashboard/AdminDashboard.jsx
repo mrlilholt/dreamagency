@@ -565,16 +565,30 @@ const [missions, setMissions] = useState([]);
       if (dateB) return 1;
       return sortHustlesByTitle(a, b);
   };
+  const parseHustleDropDate = (hustle) => {
+      if (!hustle?.scheduled_date) return null;
+      const parsed = new Date(`${hustle.scheduled_date}T12:00:00`);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+  const isHustleArchived = (hustle) => hustle.status === "archived";
+  const isHustleScheduledFuture = (hustle) => {
+      if (hustle.status !== "scheduled") return false;
+      const dropDate = parseHustleDropDate(hustle);
+      if (!dropDate) return false;
+      return dropDate > new Date();
+  };
+  const isHustleLive = (hustle) => {
+      if (isHustleArchived(hustle)) return false;
+      if (!hustle.status || hustle.status === "live") return true;
+      if (hustle.status !== "scheduled") return true;
+      const dropDate = parseHustleDropDate(hustle);
+      if (!dropDate) return true;
+      return dropDate <= new Date();
+  };
 
-  const liveHustles = sideHustles
-      .filter((hustle) => hustle.status !== "archived" && hustle.status !== "scheduled")
-      .sort(sortHustlesByTitle);
-  const scheduledHustles = sideHustles
-      .filter((hustle) => hustle.status === "scheduled")
-      .sort(sortHustlesBySchedule);
-  const archivedHustles = sideHustles
-      .filter((hustle) => hustle.status === "archived")
-      .sort(sortHustlesByTitle);
+  const liveHustles = sideHustles.filter(isHustleLive).sort(sortHustlesByTitle);
+  const scheduledHustles = sideHustles.filter(isHustleScheduledFuture).sort(sortHustlesBySchedule);
+  const archivedHustles = sideHustles.filter(isHustleArchived).sort(sortHustlesByTitle);
 
   const sideHustleSections = {
       live: {
