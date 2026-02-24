@@ -1,84 +1,151 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isSelfOrAdmin(userId) {
+      return isSelf(userId) || isAdmin();
+    }
+
+    function canIncrementEggCounters() {
+      let previousCount = resource.data.claimedCount is int ? resource.data.claimedCount : 0;
+      let previousClassIds = resource.data.claimedClassIds is list ? resource.data.claimedClassIds : [];
+      return isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "claimedCount",
+          "claimedClassIds",
+          "updatedAt"
+        ])
+        && request.resource.data.claimedCount is int
+        && request.resource.data.claimedCount == (previousCount + 1)
+        && request.resource.data.claimedClassIds is list
+        && request.resource.data.claimedClassIds.hasAll(previousClassIds)
+        && request.resource.data.claimedClassIds.size() >= previousClassIds.size()
+        && request.resource.data.claimedClassIds.size() <= previousClassIds.size() + 1;
+    }
 
     // 1. USERS: Allow students to read/write their own profile
     match /users/{userId} {
-      allow read, update: if request.auth != null;
-      allow create: if request.auth != null; 
+      allow read: if isSignedIn();
+      allow update: if isSelfOrAdmin(userId);
+      allow create: if isSelf(userId); 
 
       match /alerts/{alertId} {
-        allow read, write, delete: if request.auth != null;
+        allow read, write, delete: if isSelfOrAdmin(userId);
       }
 
       match /event_claims/{claimId} {
-        allow read, write, delete: if request.auth != null;
+        allow read, write, delete: if isSelfOrAdmin(userId);
+      }
+
+      match /egg_progress/{eggId} {
+        allow read, write, delete: if isSelfOrAdmin(userId);
+      }
+
+      match /egg_claims/{eggId} {
+        allow read, write, delete: if isSelfOrAdmin(userId);
       }
     }
 
     // 2. ACTIVE JOBS: Allow students to create/update their contracts
     match /active_jobs/{jobId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn();
     }
 
     // 3. CONTRACTS: Read-only for students
     match /contracts/{contractId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null; 
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); 
     }
 
     // 4. SYSTEM: For the 'Market Crash' global event
     match /system/{docId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn();
     }
 
     // 4b. EVENTS: Special event engine
     match /events/{eventId} {
-      allow read, write: if request.auth != null;
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // 5. SHOP ITEMS
     match /shop_items/{itemId} {
-      allow read: if request.auth != null;  // Everyone can see the shop
-      allow write: if request.auth != null; // Allows you (and technically students) to buy/seed
+      allow read: if isSignedIn();  // Everyone can see the shop
+      allow write: if isSignedIn(); // Kept permissive because student purchases update stock.
     }
 
     // 6. MEDALS / BADGES
     match /badges/{badgeId} {
-      allow read: if request.auth != null;  // Students need to read to see profile
-      allow write: if request.auth != null; // Admin needs to write to edit
+      allow read: if isSignedIn();  // Students need to read to see profile
+      allow write: if isSignedIn(); // Kept permissive for legacy student-side egg badge seeding.
     }
 
     // 7. SUGGESTIONS
     match /suggestions/{suggestionId} {
       // Allow students to submit
-      allow create: if request.auth != null;
+      allow create: if isSignedIn();
 
       // Allow Admin to Read (Inbox), Update (Mark Read), and Delete
       // (For simplicity, we are allowing any logged-in user to read/write this collection 
       // so your Admin Dashboard works immediately)
-      allow read, update, delete: if request.auth != null;
+      allow read, update, delete: if isSignedIn();
     }
 
     // 8. DAILY MISSIONS
     // Admins need read/write. Students need read.
     match /daily_missions/{missionId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null; // Ideally restrict to admins later
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); // Ideally restrict to admins later
     }
 
     // 9. CLASSES (Theme + onboarding lookups)
     match /classes/{classId} {
-      allow read, write: if request.auth != null; // tighten later if needed
+      allow read, write: if isSignedIn(); // tighten later if needed
     }
 
-    // 9. SIDE HUSTLES
+    // 10. SIDE HUSTLES
     match /side_hustles/{sideHustleId} {
-      allow read, write: if request.auth != null; // Ideally restrict writes to admins later
+      allow read, write: if isSignedIn(); // Ideally restrict writes to admins later
     }
 
     match /side_hustle_jobs/{jobId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn();
+    }
+
+    // 11. EGG ENGINE
+    match /eggs/{eggId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || canIncrementEggCounters();
+
+      match /claims/{claimId} {
+        allow read: if isSignedIn() && (isAdmin() || request.auth.uid == claimId);
+        allow create: if isSignedIn() && request.auth.uid == claimId;
+        allow update, delete: if isAdmin();
+      }
+
+      match /class_claims/{classId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    match /egg_anchor_locks/{anchorId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }

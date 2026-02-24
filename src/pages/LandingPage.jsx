@@ -4,6 +4,7 @@ import {
     ArrowRight, Layers, PenTool, Globe, 
     ShieldCheck, X, CheckCircle, Loader2, Send 
 } from "lucide-react";
+import EggAnchor from "../components/EggAnchor";
 
 export default function LandingPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -31,9 +32,13 @@ export default function LandingPage() {
       
       {/* --- NAVBAR --- */}
       <nav className="flex items-center justify-between px-6 py-6 max-w-7xl mx-auto relative z-20">
-        <div className="flex items-center gap-3 font-black text-2xl tracking-tighter text-slate-900">
+        <div className="relative flex items-center gap-3 font-black text-2xl tracking-tighter text-slate-900">
           <img src="/brand/xplabslogo.png" alt="XP Labs" className="h-9 w-9 object-cover" />
           XP Labs
+          <EggAnchor
+            anchorId="public.landing.nav_brand"
+            className="-right-5 top-0 text-xs"
+          />
         </div>
 
         <div className="hidden md:flex gap-8 font-bold text-slate-500 text-sm">
@@ -63,8 +68,12 @@ export default function LandingPage() {
 
         <div className="max-w-7xl mx-auto px-6 relative z-10 grid lg:grid-cols-2 gap-12 items-center">
           <div>
-            <div className="inline-block px-3 py-1 bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full mb-6 tracking-wide">
+            <div className="relative inline-block px-3 py-1 bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full mb-6 tracking-wide">
               EST. 2024 • GLOBAL DESIGN LEADER
+              <EggAnchor
+                anchorId="public.landing.hero_badge"
+                className="-right-4 -top-2 text-xs"
+              />
             </div>
             <h1 className="text-6xl lg:text-7xl font-black tracking-tight leading-[1.1] mb-6 text-slate-900">
               We engineer <br/>

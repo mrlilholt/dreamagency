@@ -14,6 +14,7 @@ import {
     Music, Percent, X
 } from "lucide-react";
 import Navbar from "../../components/Navbar"; 
+import EggAnchor from "../../components/EggAnchor";
 import { useTheme } from "../../context/ThemeContext";
 
 // 1. THE ICON MAP
@@ -354,8 +355,12 @@ export default function RewardShop() {
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-end gap-4">
             <div>
-                <h1 className="text-3xl font-black theme-text flex items-center gap-2" onClick={handleEggTrigger}>
+                <h1 className="relative text-3xl font-black theme-text flex items-center gap-2" onClick={handleEggTrigger}>
                     <ShoppingBag className="text-indigo-600" /> {labels.shop}
+                    <EggAnchor
+                        anchorId="student.shop.header"
+                        className="-right-5 top-0 text-xs"
+                    />
                 </h1>
                 <p className="theme-muted font-medium">Spend your hard-earned {labels.currency.toLowerCase()} on real life rewards.</p>
             </div>

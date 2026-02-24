@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { db } from "../lib/firebase";
 import { doc, onSnapshot, collection, getDocs, addDoc, serverTimestamp, updateDoc, arrayRemove, getDoc, setDoc, increment } from "firebase/firestore"; // <--- Updated imports
 import Navbar from "../components/Navbar";
+import EggAnchor from "../components/EggAnchor";
 import { 
     Shield, Lock, Calendar, Star, User, Trophy, Medal, Crown, Zap, Target, Award, Rocket, Heart, Flag, DollarSign, Mail, Send, X, Bomb,            // <--- ADD THIS
     AlertTriangle, Pencil, Save  
@@ -409,6 +410,10 @@ const [panicMode, setPanicMode] = useState(false);
                             ${(agentData.currency || 0).toLocaleString()}
                         </div>
                     </div>
+                    <EggAnchor
+                        anchorId="student.profile.bankroll"
+                        className="right-2 top-2 text-xs"
+                    />
                 </div>
 
                 <div
@@ -437,6 +442,10 @@ const [panicMode, setPanicMode] = useState(false);
                             {agentData.completed_jobs || 0}
                         </div>
                     </div>
+                    <EggAnchor
+                        anchorId="student.profile.mission"
+                        className="right-2 top-2 text-xs"
+                    />
                 </div>
 
                 <div
@@ -455,6 +464,10 @@ const [panicMode, setPanicMode] = useState(false);
                             {Object.keys(agentData.badges || {}).length}
                         </div>
                     </div>
+                    <EggAnchor
+                        anchorId="student.profile.honors"
+                        className="right-2 top-2 text-xs"
+                    />
                 </div>
             </div>
         </div>

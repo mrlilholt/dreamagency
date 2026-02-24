@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from "./context/ThemeContext";
+import { EggProvider } from "./context/EggContext";
 import NotificationLayer from "./components/NotificationLayer";
 import InstallBanner from "./components/InstallBanner";
 
@@ -19,6 +20,7 @@ import Leaderboard from "./pages/Leaderboard";
 import AdminRoster from "./pages/admin/AdminRoster";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminEvents from "./pages/admin/AdminEvents";
+import AdminEggs from "./pages/admin/AdminEggs";
 import AgentProfile from "./pages/AgentProfile";
 import ProcessPage from "./pages/ProcessPage"; // <--- NEW
 import ClientsPage from "./pages/ClientsPage";
@@ -39,7 +41,7 @@ const PrivateRoute = ({ children, requireAdmin = false }) => {
 
   // Simple Admin Check (Expand this logic as needed)
   if (requireAdmin && userData?.role !== 'admin') {
-      // return <Navigate to="/dashboard" />; // Optional: Kick non-admins out
+      return <Navigate to="/dashboard" replace />;
   }
 
   return children;
@@ -51,9 +53,10 @@ function App() {
     <AuthProvider>
       <ThemeProvider>
         <BrowserRouter>
-          <NotificationLayer />
-          <InstallBanner />
-          <Routes>
+          <EggProvider>
+            <NotificationLayer />
+            <InstallBanner />
+            <Routes>
           
           {/* PUBLIC ROUTES */}
           <Route path="/" element={<LandingPage />} />
@@ -95,17 +98,47 @@ function App() {
           } />
 
           {/* ADMIN ROUTES */}
-          <Route path="/admin/create" element={<CreateContract />} />
-          <Route path="/admin/contracts" element={<AllContracts />} />
-          <Route path="/admin/edit/:id" element={<EditContract />} />
-          <Route path="/admin/roster" element={<AdminRoster />} />
-          <Route path="/admin/analytics" element={<AdminAnalytics />} />
-          <Route path="/admin/events" element={<AdminEvents />} />
+          <Route path="/admin/create" element={
+            <PrivateRoute requireAdmin>
+              <CreateContract />
+            </PrivateRoute>
+          } />
+          <Route path="/admin/contracts" element={
+            <PrivateRoute requireAdmin>
+              <AllContracts />
+            </PrivateRoute>
+          } />
+          <Route path="/admin/edit/:id" element={
+            <PrivateRoute requireAdmin>
+              <EditContract />
+            </PrivateRoute>
+          } />
+          <Route path="/admin/roster" element={
+            <PrivateRoute requireAdmin>
+              <AdminRoster />
+            </PrivateRoute>
+          } />
+          <Route path="/admin/analytics" element={
+            <PrivateRoute requireAdmin>
+              <AdminAnalytics />
+            </PrivateRoute>
+          } />
+          <Route path="/admin/events" element={
+            <PrivateRoute requireAdmin>
+              <AdminEvents />
+            </PrivateRoute>
+          } />
+          <Route path="/admin/eggs" element={
+            <PrivateRoute requireAdmin>
+              <AdminEggs />
+            </PrivateRoute>
+          } />
 
           {/* FALLBACK */}
           <Route path="*" element={<Navigate to="/" replace />} />
 
-          </Routes>
+            </Routes>
+          </EggProvider>
         </BrowserRouter>
       </ThemeProvider>
     </AuthProvider>

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, ShieldCheck, Gamepad2, Landmark, Cpu, Globe } from "lucide-react";
+import EggAnchor from "../components/EggAnchor";
 
 export default function ClientsPage() {
   const cases = [
@@ -53,8 +54,12 @@ export default function ClientsPage() {
 
       {/* HEADER */}
       <div className="max-w-7xl mx-auto px-6 pt-12 pb-24">
-        <h1 className="text-6xl md:text-8xl font-black text-slate-900 mb-8 tracking-tighter">
+        <h1 className="relative text-6xl md:text-8xl font-black text-slate-900 mb-8 tracking-tighter">
           CLIENT <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">DOSSIERS.</span>
+          <EggAnchor
+            anchorId="public.clients.header"
+            className="right-0 top-2 text-sm"
+          />
         </h1>
         <p className="text-2xl text-slate-500 max-w-3xl font-light">
           We have shaped the visual identity of Fortune 500 companies, indie darlings, and government institutions. Here is what is declassified.

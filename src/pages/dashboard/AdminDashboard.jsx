@@ -1962,8 +1962,14 @@ const [missions, setMissions] = useState([]);
                                     <option value="none">Standard item</option>
                                     <option value="xp_boost">XP Multiplier</option>
                                     <option value="currency_boost">{labels.currency} Multiplier</option>
+                                    <option value="hint_token">Hint Token</option>
                                 </select>
                             </div>
+                            {shopForm.effectType === "hint_token" && (
+                                <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                    Hint tokens can be spent to unlock purchasable hints on egg drops.
+                                </p>
+                            )}
 
                             {shopForm.effectType === "xp_boost" && (
                                 <div className="grid grid-cols-2 gap-4">

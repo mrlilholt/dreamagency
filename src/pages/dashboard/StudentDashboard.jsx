@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
+import EggAnchor from "../../components/EggAnchor";
 import { THEME_OPTIONS } from "../../lib/themeConfig";
 import { useTheme } from "../../context/ThemeContext";
 import { 
@@ -784,6 +785,10 @@ export default function StudentDashboard() {
                 >
                     <DollarSign size={18} />
                 </button>
+                <EggAnchor
+                    anchorId="student.dashboard.wallet_card"
+                    className="top-10 right-3 text-xs"
+                />
                 {jackpotActive && (
                     <div className="absolute inset-0 pointer-events-none overflow-hidden">
                         {jackpotSparkles.map((sparkle) => (
@@ -849,6 +854,10 @@ export default function StudentDashboard() {
                 >
                     <Key size={18} />
                 </button>
+                <EggAnchor
+                    anchorId="student.dashboard.xp_card"
+                    className="top-10 right-3 text-xs"
+                />
                 <div className="relative z-10 w-full mr-4">
                     <div className="flex justify-between items-end mb-1">
                         <p className="theme-muted text-xs font-bold uppercase tracking-wider">{labels.xp} Progress</p>
@@ -1100,10 +1109,10 @@ export default function StudentDashboard() {
       )}
       {/* --- TOP SECRET MISSION POPUP --- */}
       {showMissionModal && dailyMission && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
             
             {/* MANILA FOLDER UI */}
-            <div className="bg-[#fdf6e3] w-full max-w-lg rounded-sm shadow-2xl overflow-hidden relative rotate-1 border border-[#d1c7ad]">
+            <div className="bg-[#fdf6e3] w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-[80rem] max-h-[calc(100vh-1.5rem)] rounded-sm shadow-2xl overflow-hidden relative rotate-0 sm:rotate-1 border border-[#d1c7ad] flex flex-col">
                 
                 {/* Folder Tab */}
                 <div className="absolute top-0 left-0 bg-[#e6dcc3] w-1/3 h-8 rounded-br-xl border-r border-b border-[#d1c7ad] flex items-center justify-center">
@@ -1123,7 +1132,7 @@ export default function StudentDashboard() {
                     <X size={20} />
                 </button>
 
-                <div className="p-8 pt-12">
+                <div className="p-5 sm:p-8 pt-12 overflow-y-auto">
                     
                     {/* Header */}
                     <div className="text-center mb-6">
@@ -1139,7 +1148,7 @@ export default function StudentDashboard() {
                     </div>
 
                     {/* Instructions */}
-                    <div className="bg-white p-6 border-2 border-slate-200 border-dashed rounded-xl mb-6 font-mono text-sm text-slate-700 leading-relaxed shadow-inner">
+                    <div className="bg-white p-4 sm:p-6 border-2 border-slate-200 border-dashed rounded-xl mb-6 font-mono text-[clamp(0.9rem,1.05vw,1.1rem)] text-slate-700 leading-relaxed shadow-inner max-h-[45vh] overflow-y-auto break-words">
                         {dailyMission.instruction}
                     </div>
 

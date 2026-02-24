@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Search, Lightbulb, PenTool, RefreshCw, ShieldCheck } from "lucide-react";
+import EggAnchor from "../components/EggAnchor";
 
 export default function ProcessPage() {
   const steps = [
@@ -50,7 +51,13 @@ export default function ProcessPage() {
       {/* HERO */}
       <div className="bg-slate-900 text-white py-20 px-6">
         <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-5xl md:text-6xl font-black mb-6 tracking-tight">THE PROTOCOL</h1>
+            <h1 className="relative inline-block text-5xl md:text-6xl font-black mb-6 tracking-tight">
+              THE PROTOCOL
+              <EggAnchor
+                anchorId="public.process.hero_title"
+                className="-right-5 top-1 text-xs"
+              />
+            </h1>
             <p className="text-xl text-slate-400 max-w-2xl mx-auto">
                 Our methodology is rigorous, scientific, and repeatable. We do not rely on "inspiration." We rely on The Process.
             </p>

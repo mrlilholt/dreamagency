@@ -1,5 +1,6 @@
 import { useParams, Link, Navigate } from "react-router-dom";
 import { ArrowLeft, CheckCircle, Layers, Cpu, Zap, ArrowRight } from "lucide-react";
+import EggAnchor from "../components/EggAnchor";
 
 // --- THE LORE DATABASE ---
 const CASE_STUDIES = {
@@ -150,13 +151,17 @@ export default function CaseStudyDetail() {
                 </blockquote>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8">
+            <div className="relative bg-slate-50 border border-slate-200 rounded-2xl p-8">
                 <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
                     <Zap size={20} className="text-yellow-500" /> Lab Note
                 </h3>
                 <p className="text-slate-600">
                     This project required <strong>{study.tags[1]}</strong>. If you are interested in this career path, check the "Available Contracts" in your dashboard for related tasks.
                 </p>
+                <EggAnchor
+                  anchorId="public.case_study.lab_note"
+                  className="right-3 top-3 text-xs"
+                />
             </div>
         </div>
 
