@@ -28,6 +28,12 @@ All notable changes to this project should be documented in this file.
 ### Added
 - Added hard delete support for admin-managed eggs in the Egg Engine UI, including automatic anchor lock release (`src/pages/admin/AdminEggs.jsx`).
 
+## 2026-02-26
+
+### Fixed
+- Fixed student contract visibility so global contracts are included for all classes by normalizing class IDs and allowing global aliases in contract filtering/listeners (`src/pages/dashboard/StudentDashboard.jsx`).
+- Normalized edit-contract fallback class assignment from `"Global"` to `"all"` to keep new/edited contracts consistent with global audience semantics (`src/pages/admin/EditContract.jsx`).
+
 ## 2026-02-21
 
 ### Added

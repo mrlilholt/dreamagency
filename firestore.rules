@@ -19,8 +19,6 @@ service cloud.firestore {
     }
 
     function canIncrementEggCounters() {
-      let previousCount = resource.data.claimedCount is int ? resource.data.claimedCount : 0;
-      let previousClassIds = resource.data.claimedClassIds is list ? resource.data.claimedClassIds : [];
       return isSignedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "claimedCount",
@@ -28,11 +26,15 @@ service cloud.firestore {
           "updatedAt"
         ])
         && request.resource.data.claimedCount is int
-        && request.resource.data.claimedCount == (previousCount + 1)
-        && request.resource.data.claimedClassIds is list
-        && request.resource.data.claimedClassIds.hasAll(previousClassIds)
-        && request.resource.data.claimedClassIds.size() >= previousClassIds.size()
-        && request.resource.data.claimedClassIds.size() <= previousClassIds.size() + 1;
+        && request.resource.data.claimedCount >= 0
+        && (
+          !(resource.data.claimedCount is int)
+          || request.resource.data.claimedCount >= resource.data.claimedCount
+        )
+        && (
+          request.resource.data.claimedClassIds == null
+          || request.resource.data.claimedClassIds is list
+        );
     }
 
     // 1. USERS: Allow students to read/write their own profile

@@ -19,7 +19,7 @@ export default function EditContract() {
     description_image_url: "",
     bounty: 0,
     xp_reward: 0,
-    class_id: "Global",
+    class_id: "all",
     status: "live",
     scheduled_date: ""
   });
@@ -37,7 +37,7 @@ export default function EditContract() {
                 description_image_url: data.description_image_url || "",
                 bounty: data.bounty,
                 xp_reward: data.xp_reward,
-                class_id: data.class_id || "Global",
+                class_id: data.class_id || "all",
                 status: data.status && data.status !== "open" ? data.status : "live",
                 scheduled_date: data.scheduled_date || ""
             });

@@ -47,6 +47,17 @@ import {
   filterEventsByClaims
 } from "../../lib/eventUtils";
 
+const GLOBAL_CLASS_IDS = new Set(["all", "global", "all_classes", "all_class"]);
+
+const normalizeClassId = (value) => {
+  if (typeof value === "string") {
+    return value.trim().toLowerCase();
+  }
+  return "";
+};
+
+const isGlobalClassId = (value) => GLOBAL_CLASS_IDS.has(normalizeClassId(value));
+
 export default function StudentDashboard() {
   const { user, userData } = useAuth();
   const navigate = useNavigate();
@@ -134,6 +145,11 @@ export default function StudentDashboard() {
       size: `${12 + (index % 3) * 4}px`
     }))
   ), []);
+
+  const allowedClassKeys = useMemo(
+    () => Array.from(new Set(allowedClasses.map(normalizeClassId).filter(Boolean))),
+    [allowedClasses]
+  );
 
   const resolveEventClaims = async (activeEvents, userId) => {
       const oneTimeEvents = getOneTimeEvents(activeEvents);
@@ -375,7 +391,11 @@ export default function StudentDashboard() {
 
           // Filter: Is there a mission for MY class?
           // (Checks if the mission's class_id matches ANY of the student's allowed classes)
-          const validMission = missions.find(m => allowedClasses.includes(m.class_id));
+          const validMission = missions.find(
+            (mission) =>
+              isGlobalClassId(mission.class_id) ||
+              allowedClassKeys.includes(normalizeClassId(mission.class_id))
+          );
 
           if (validMission) {
               // Check if I already did it
@@ -389,24 +409,19 @@ export default function StudentDashboard() {
       };
 
       checkMissions();
-  }, [allowedClasses, stats.completed_missions]); // Re-run if classes load or if we finish a mission
+  }, [allowedClasses.length, allowedClassKeys, stats.completed_missions]); // Re-run if classes load or if we finish a mission
 
   // 2. LIVE LISTENER: Contracts (Depends on allowedClasses)
   useEffect(() => {
-    // Wait until we have a class list so we don't query empty
-    if (allowedClasses.length === 0) return;
-
-    // Query Firestore for ANY class in the list
-    const q = query(
-        collection(db, "contracts"),
-        where("class_id", "in", allowedClasses)
-    );
-
     const unsubscribe = onSnapshot(
-        q,
+        collection(db, "contracts"),
         (snapshot) => {
             const liveContracts = snapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }));
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter((contract) => {
+                  const contractClassId = normalizeClassId(contract.class_id);
+                  return isGlobalClassId(contractClassId) || allowedClassKeys.includes(contractClassId);
+                });
 
             setContracts(liveContracts);
         },
@@ -416,18 +431,19 @@ export default function StudentDashboard() {
     );
 
     return () => unsubscribe();
-  }, [allowedClasses]); 
+  }, [allowedClassKeys]); 
 
   // 2b. LIVE LISTENER: Side Hustles (Always-on promos)
   useEffect(() => {
-    if (allowedClasses.length === 0) return;
-
     const unsubscribe = onSnapshot(
       collection(db, "side_hustles"),
       (snapshot) => {
         const liveHustles = snapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(hustle => hustle.class_id === "all" || allowedClasses.includes(hustle.class_id));
+          .filter((hustle) => {
+            const hustleClassId = normalizeClassId(hustle.class_id);
+            return isGlobalClassId(hustleClassId) || allowedClassKeys.includes(hustleClassId);
+          });
 
         setSideHustles(liveHustles);
       },
@@ -437,7 +453,7 @@ export default function StudentDashboard() {
     );
 
     return () => unsubscribe();
-  }, [allowedClasses]);
+  }, [allowedClassKeys]);
 
   // 3. LIVE LISTENER: Active Jobs (Student Progress)
   useEffect(() => {
@@ -606,7 +622,8 @@ export default function StudentDashboard() {
 
     // 2. Students see contracts if they are in the 'allowedClasses' list
     // (We use the state we built earlier, rather than the single userData.class_id)
-    if (!allowedClasses.includes(contract.class_id)) return false;
+    const contractClassId = normalizeClassId(contract.class_id);
+    if (!isGlobalClassId(contractClassId) && !allowedClassKeys.includes(contractClassId)) return false;
 
     // 3. Students only see live contracts (scheduled launches stay hidden)
     return isContractLiveForStudents(contract);
@@ -617,10 +634,11 @@ export default function StudentDashboard() {
   const nextLevelXp = currentLevel * 1000;
   const progress = ((stats.xp % 1000) / 1000) * 100;
   
-  const visibleSideHustles = sideHustles.filter(hustle =>
-    (hustle.class_id === "all" || allowedClasses.includes(hustle.class_id)) &&
-    hustle.status !== "archived"
-  );
+  const visibleSideHustles = sideHustles.filter((hustle) => {
+    const hustleClassId = normalizeClassId(hustle.class_id);
+    return (isGlobalClassId(hustleClassId) || allowedClassKeys.includes(hustleClassId)) &&
+      hustle.status !== "archived";
+  });
 
   const getSideHustleStatusLabel = (status, scheduledDate) => {
     if (status === "scheduled") {
