@@ -117,6 +117,11 @@ service cloud.firestore {
       allow read, write: if isSignedIn(); // tighten later if needed
     }
 
+    // 9b. ADMIN STUDENT METRICS
+    match /admin_student_metrics/{metricId} {
+      allow read, write: if isAdmin();
+    }
+
     // 10. SIDE HUSTLES
     match /side_hustles/{sideHustleId} {
       allow read, write: if isSignedIn(); // Ideally restrict writes to admins later

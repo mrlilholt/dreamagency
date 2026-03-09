@@ -105,6 +105,7 @@ Admin (private + admin role required):
 - `suggestions/{suggestionId}`
 - `daily_missions/{missionId}`
 - `classes/{classId}`
+- `admin_student_metrics/{metricId}`
 - `side_hustles/{sideHustleId}`
 - `side_hustle_jobs/{uid}_{sideHustleId}`
 
@@ -115,6 +116,7 @@ Source: `firestore.rules`.
 - Most collections allow read/write for any authenticated user.
 - Egg system collections are admin-write and user-claim scoped in rules.
 - `users/{uid}` writes are now self-or-admin.
+- `admin_student_metrics/{metricId}` is admin-only and stores per-class manual productivity overrides for analytics reports.
 - Some legacy collections remain permissive for current velocity.
 - If a feature should become admin-only, update both UI checks and `firestore.rules`.
 
@@ -127,6 +129,7 @@ This codebase intentionally mixes legacy and newer field conventions. Preserve c
 - `class_id`, `active_date`, `scheduled_date`, `xp_reward`, `reward_cash`, `reward_xp`, `current_stage`, `current_level`
 3. Some newer/admin fields are camelCase:
 - `createdAt`, `updatedAt`, `classIds`, `appliesToTypes`, `flatCurrencyBonus`
+- `classId`, `studentId`, `productivityMode`, `manualScore`
 4. Do not remove old aliases (`open` vs `live`, `name` vs `displayName`) without a migration pass.
 
 Important enums in active logic:
@@ -199,7 +202,8 @@ Important enums in active logic:
 ### Roster + analytics + leaderboard
 
 - Roster operations: `src/pages/admin/AdminRoster.jsx`
-- Analytics: `src/pages/admin/AdminAnalytics.jsx`
+- Analytics + student work drill-down: `src/pages/admin/AdminAnalytics.jsx`
+- Analytics data shaping/backfill helpers: `src/lib/adminAnalytics.js`
 - Leaderboard: `src/pages/Leaderboard.jsx`
 
 ### Shared shell + nav + alerts
@@ -259,6 +263,8 @@ If this breaks, check these files first:
   `src/components/NotificationLayer.jsx`, `src/pages/dashboard/RewardShop.jsx`
 - Theme appears wrong:
   `src/context/ThemeContext.jsx`, `src/lib/themeConfig.js`, `src/index.css`
+- Student report / productivity score looks wrong:
+  `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`, `firestore.rules`
 - PWA install behavior/cache issues:
   `src/components/InstallBanner.jsx`, `public/service-worker.js`, `public/manifest.webmanifest`
 - Egg not appearing / wrong trigger / claim issue:
@@ -291,7 +297,8 @@ Use these keywords in tickets/prompts for fast navigation:
 - `SIDE_HUSTLES` -> `src/pages/dashboard/AdminDashboard.jsx`, `src/pages/SideHustleDetails.jsx`
 - `SHOP_BOOSTS` -> `src/pages/dashboard/RewardShop.jsx`, `src/pages/dashboard/AdminDashboard.jsx`, `src/components/NotificationLayer.jsx`
 - `ROSTER_OPS` -> `src/pages/admin/AdminRoster.jsx`
-- `ANALYTICS` -> `src/pages/admin/AdminAnalytics.jsx`
+- `ANALYTICS` -> `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`
+- `PRODUCTIVITY_REPORTS` -> `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`, `firestore.rules`
 - `LEADERBOARD` -> `src/pages/Leaderboard.jsx`
 - `THEME_SYSTEM` -> `src/context/ThemeContext.jsx`, `src/lib/themeConfig.js`, `src/index.css`
 - `PWA` -> `src/main.jsx`, `src/components/InstallBanner.jsx`, `public/service-worker.js`, `public/manifest.webmanifest`

@@ -12,6 +12,8 @@ All notable changes to this project should be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Added an admin analytics student-work drill-down with class -> student selection, backfilled contract/mission/side-hustle reporting, printable reports, CSV export, and per-class productivity overrides (`src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`).
+- Added admin-only analytics override storage in `admin_student_metrics/{metricId}` with matching Firestore rules (`firestore.rules`).
 - Created `AGENTS.md` as the shared operations map for architecture, route ownership, data contracts, and conventions.
 - Created this `CHANGELOG.md` with maintenance rules so updates remain easy to reference.
 - Added a new admin-managed egg engine for future easter eggs with anchor-based placement, trigger policies, fixed rewards, badge auto-create, and hint controls (`src/pages/admin/AdminEggs.jsx`, `src/context/EggContext.jsx`, `src/components/EggAnchor.jsx`, `src/lib/eggAnchors.js`, `src/lib/eggEngine.js`).
@@ -21,6 +23,7 @@ All notable changes to this project should be documented in this file.
 - Added hint-token support path by extending admin shop effect type options (`src/pages/dashboard/AdminDashboard.jsx`).
 
 ### Fixed
+- Fixed analytics class matching so admin drill-down uses all known student class fields (`class_id`, `active_class_id`, `class_ids`, `enrolled_classes`) instead of only the legacy primary class field (`src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`).
 - Updated egg rules to allow student claim transactions to increment only egg claim counters (`claimedCount`, `claimedClassIds`, `updatedAt`) while keeping all other egg writes admin-only (`firestore.rules`).
 - Relaxed egg counter rule matching to use `affectedKeys()` and removed strict `updatedAt == request.time` comparison to avoid false permission-denied on transformed transaction updates (`firestore.rules`).
 - Updated egg runtime so claimed eggs remain clickable and show an explicit “already claimed” state, while unclaimed eggs remain retryable until a claim is actually saved in Firebase (`src/context/EggContext.jsx`).
