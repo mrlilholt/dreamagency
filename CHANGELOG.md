@@ -12,6 +12,7 @@ All notable changes to this project should be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Added a fallback onboarding class for `CS-ACCESS` that creates the `Computer Science Quarter 4` class record on first use so new users can join and the class behaves like the existing roster/classes setup (`src/lib/gameConfig.js`, `src/pages/Onboarding.jsx`).
 - Added an admin analytics student-work drill-down with class -> student selection, backfilled contract/mission/side-hustle reporting, printable reports, CSV export, and per-class productivity overrides (`src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`).
 - Added admin-only analytics override storage in `admin_student_metrics/{metricId}` with matching Firestore rules (`firestore.rules`).
 - Created `AGENTS.md` as the shared operations map for architecture, route ownership, data contracts, and conventions.
@@ -23,6 +24,7 @@ All notable changes to this project should be documented in this file.
 - Added hint-token support path by extending admin shop effect type options (`src/pages/dashboard/AdminDashboard.jsx`).
 
 ### Fixed
+- Fixed `CS-ACCESS` onboarding so that code now always maps to the canonical `computer_science_quarter_4` class and re-syncs its class document to the Agency theme instead of inheriting an older Cyber-themed class entry (`src/pages/Onboarding.jsx`).
 - Fixed analytics class matching so admin drill-down uses all known student class fields (`class_id`, `active_class_id`, `class_ids`, `enrolled_classes`) instead of only the legacy primary class field (`src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`).
 - Updated egg rules to allow student claim transactions to increment only egg claim counters (`claimedCount`, `claimedClassIds`, `updatedAt`) while keeping all other egg writes admin-only (`firestore.rules`).
 - Relaxed egg counter rule matching to use `affectedKeys()` and removed strict `updatedAt == request.time` comparison to avoid false permission-denied on transformed transaction updates (`firestore.rules`).

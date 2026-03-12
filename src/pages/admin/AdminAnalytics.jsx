@@ -642,6 +642,134 @@ export default function AdminAnalytics() {
     downloadCsv(rows, `${safeName}_${normalizeClassId(selectedClassId)}_report.csv`);
   };
 
+  const handleDownloadClassCsv = () => {
+    if (!selectedClassId || classStudentEntries.length === 0) return;
+
+    const rows = [
+      ["Class Report"],
+      ["Class", selectedClassName],
+      ["Exported", new Date().toLocaleString()],
+      ["Student Count", classStudentEntries.length],
+      [],
+      ["Student Summary"],
+      [
+        "Student",
+        "Email",
+        "Productivity Score",
+        "Score Mode",
+        "Auto Score",
+        "Manual Score",
+        "XP",
+        "Currency",
+        "Completed Work",
+        "Contracts Completed",
+        "Missions Completed",
+        "Side Hustles Completed",
+        "Productivity Note"
+      ]
+    ];
+
+    classStudentEntries.forEach((entry) => {
+      rows.push([
+        getStudentName(entry.student),
+        entry.student.email || "",
+        entry.effectiveProductivityScore,
+        getProductivityModeLabel(entry.metric),
+        entry.report.autoProductivityScore,
+        entry.metric?.manualScore ?? "",
+        getStudentXp(entry.student),
+        getStudentCurrency(entry.student),
+        `${entry.report.completedWorkCount}/${entry.report.availableWorkCount}`,
+        `${entry.report.contractCompletedCount}/${entry.report.contractRows.length}`,
+        `${entry.report.missionCompletedCount}/${entry.report.missionRows.length}`,
+        `${entry.report.sideHustleCompletedCount}/${entry.report.sideHustleRows.length}`,
+        entry.metric?.note || ""
+      ]);
+    });
+
+    rows.push([]);
+    rows.push(["Detailed Activity"]);
+    rows.push([
+      "Student",
+      "Email",
+      "Work Type",
+      "Title",
+      "Status",
+      "Completed",
+      "Progress",
+      "Current Stage / Level",
+      "Active Date",
+      "Started At",
+      "Last Submitted",
+      "Last Completed / Approved",
+      "Links"
+    ]);
+
+    classStudentEntries.forEach((entry) => {
+      const studentName = getStudentName(entry.student);
+      const studentEmail = entry.student.email || "";
+
+      entry.report.contractRows.forEach((row) => {
+        rows.push([
+          studentName,
+          studentEmail,
+          "contract",
+          row.title,
+          row.statusLabel,
+          row.completed ? "Yes" : "No",
+          row.progressLabel,
+          row.currentStageLabel,
+          "",
+          formatDateTimeLabel(row.startedAt),
+          formatDateTimeLabel(row.lastSubmittedAt),
+          formatDateTimeLabel(row.completedAt),
+          row.submissionLinks.map((link) => link.link).join(" | ")
+        ]);
+      });
+
+      entry.report.missionRows.forEach((row) => {
+        rows.push([
+          studentName,
+          studentEmail,
+          "mission",
+          row.title,
+          row.statusLabel,
+          row.completed ? "Yes" : "No",
+          row.completed ? "1/1 complete" : row.statusLabel === "Scheduled" ? "Scheduled" : "0/1 complete",
+          "",
+          row.activeDate || "",
+          "",
+          "",
+          "",
+          ""
+        ]);
+      });
+
+      entry.report.sideHustleRows.forEach((row) => {
+        rows.push([
+          studentName,
+          studentEmail,
+          "side_hustle",
+          row.title,
+          row.statusLabel,
+          row.completed ? "Yes" : "No",
+          row.progressLabel,
+          `Level ${row.currentLevel}`,
+          "",
+          "",
+          formatDateTimeLabel(row.lastSubmittedAt),
+          formatDateTimeLabel(row.lastApprovedAt),
+          row.job?.submission_link || ""
+        ]);
+      });
+
+      rows.push([]);
+    });
+
+    const safeClassName = selectedClassName.replace(/\s+/g, "_").toLowerCase();
+    downloadCsv(rows, `${safeClassName}_class_report.csv`);
+  };
+
   const handlePrintStudentReport = () => {
     if (!selectedStudentEntry || !selectedClassId) return;
     const { student, report, effectiveProductivityScore } = selectedStudentEntry;
@@ -990,12 +1118,21 @@ export default function AdminAnalytics() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    onClick={() => handleDownloadClassCsv()}
+                    disabled={classStudentEntries.length === 0}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Download size={16} />
+                    Class CSV
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleDownloadStudentCsv()}
                     disabled={!selectedStudentEntry}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Download size={16} />
-                    CSV
+                    Student CSV
                   </button>
                   <button
                     type="button"

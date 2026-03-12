@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { CLASS_CODES, INITIAL_STATS } from "../lib/gameConfig";
 import { doc, setDoc, serverTimestamp, collection, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { resolveThemeId } from "../lib/themeConfig";
 import { Terminal, ArrowRight, AlertCircle } from "lucide-react";
 
 export default function Onboarding() {
@@ -31,8 +32,20 @@ export default function Onboarding() {
     setLoading(true);
 
     const upperCode = code.toUpperCase().trim();
-    const classFromDirectory = availableClasses.find((cls) => cls.code === upperCode);
-    const selectedClass = classFromDirectory || CLASS_CODES[upperCode];
+    const fallbackClass = CLASS_CODES[upperCode];
+    const classFromDirectory = availableClasses.find(
+      (cls) => String(cls.code || "").toUpperCase().trim() === upperCode
+    );
+    const isQuarter4AccessCode =
+      upperCode === "CS-ACCESS"
+      && fallbackClass?.id === "computer_science_quarter_4";
+    const selectedClass = isQuarter4AccessCode
+      ? {
+          ...classFromDirectory,
+          ...fallbackClass,
+          code: upperCode
+        }
+      : (classFromDirectory || fallbackClass);
 
     // 1. Validate Code
     if (!selectedClass) {
@@ -46,6 +59,46 @@ export default function Onboarding() {
       const userRef = doc(db, "users", user.uid);
       
       const isAdmin = selectedClass.role === "admin";
+      const classThemeId = resolveThemeId(
+        selectedClass.theme_id || selectedClass.theme || "agency"
+      );
+      const shouldSyncQuarter4Class =
+        isQuarter4AccessCode
+        && !isAdmin;
+
+      if (shouldSyncQuarter4Class) {
+        await setDoc(
+          doc(db, "classes", selectedClass.id),
+          {
+            id: selectedClass.id,
+            code: upperCode,
+            name: fallbackClass?.name || selectedClass.name,
+            division: fallbackClass?.division || selectedClass.division || null,
+            department: fallbackClass?.department || selectedClass.department || null,
+            theme: fallbackClass?.theme || "Agency",
+            theme_id: resolveThemeId(fallbackClass?.theme_id || fallbackClass?.theme || "agency"),
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+      }
+
+      if (!classFromDirectory && !isAdmin) {
+        await setDoc(
+          doc(db, "classes", selectedClass.id),
+          {
+            id: selectedClass.id,
+            code: upperCode,
+            name: selectedClass.name,
+            division: selectedClass.division || null,
+            department: selectedClass.department || null,
+            theme: selectedClass.theme || null,
+            theme_id: classThemeId,
+            createdAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+      }
 
       await setDoc(userRef, {
         uid: user.uid,

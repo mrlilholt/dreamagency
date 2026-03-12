@@ -9,7 +9,7 @@ export const CLASS_CODES = {
   "CS7": {
     id: "7th_cs",
     name: "7th Grade Comp Sci",
-    theme: "Cyber",
+    theme: "Agency",
     division: "MS",
     department: "Computer Science"
   },
@@ -26,6 +26,13 @@ export const CLASS_CODES = {
     theme: "Agency",
     division: "MS",
     department: "Interdisciplinary Design"
+  },
+  "CS-ACCESS": {
+    id: "computer_science_quarter_4",
+    name: "Computer Science Quarter 4",
+    theme: "Agency",
+    division: "MS",
+    department: "Computer Science"
   },
   // You can add a "Teacher Code" so you get Admin powers automatically
   "CEO2024": {
