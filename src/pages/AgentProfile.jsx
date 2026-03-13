@@ -162,6 +162,25 @@ const [panicMode, setPanicMode] = useState(false);
       setCountdown(5);
   };
 
+  useEffect(() => {
+      setExpandedWorkLogIds((prev) => {
+          if (prev.size > 0) return prev;
+          return new Set(workLogs.slice(0, 2).map((entry) => entry.id));
+      });
+  }, [workLogs]);
+
+  const toggleWorkLogExpanded = (logId) => {
+      setExpandedWorkLogIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(logId)) {
+              next.delete(logId);
+          } else {
+              next.add(logId);
+          }
+          return next;
+      });
+  };
+
   const handleSendSuggestion = async (e) => {
       e.preventDefault();
       if (!suggestionText.trim()) return;
@@ -196,25 +215,6 @@ const [panicMode, setPanicMode] = useState(false);
   const levelProgress = Math.min(100, Math.round(((xpTotal % 1000) / 1000) * 100));
   const xpToNext = Math.max(0, level * 1000 - xpTotal);
   const hasEggBadge = !!agentData?.badges?.[EGG_BADGE_ID];
-
-  useEffect(() => {
-      setExpandedWorkLogIds((prev) => {
-          if (prev.size > 0) return prev;
-          return new Set(workLogs.slice(0, 2).map((entry) => entry.id));
-      });
-  }, [workLogs]);
-
-  const toggleWorkLogExpanded = (logId) => {
-      setExpandedWorkLogIds((prev) => {
-          const next = new Set(prev);
-          if (next.has(logId)) {
-              next.delete(logId);
-          } else {
-              next.add(logId);
-          }
-          return next;
-      });
-  };
 
   const handleEggStep = (step) => {
       if (showEggModal) return;
