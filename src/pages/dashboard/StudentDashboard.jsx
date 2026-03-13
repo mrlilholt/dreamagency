@@ -13,7 +13,8 @@ import {    collection,
             arrayUnion,
             addDoc,
             serverTimestamp,
-            setDoc } from "firebase/firestore"; 
+            setDoc,
+            orderBy } from "firebase/firestore"; 
 import { 
   Briefcase, 
   DollarSign, 
@@ -46,6 +47,15 @@ import {
   getOneTimeEvents,
   filterEventsByClaims
 } from "../../lib/eventUtils";
+import {
+  DEFAULT_WORK_LOG_END_TIME,
+  DEFAULT_WORK_LOG_REWARD,
+  DEFAULT_WORK_LOG_TIME,
+  getPromptScheduledAt,
+  isWorkLogPromptOpen,
+  normalizeWorkLogEntries,
+  promptMatchesClasses
+} from "../../lib/workLogs";
 
 const GLOBAL_CLASS_IDS = new Set(["all", "global", "all_classes", "all_class"]);
 
@@ -57,6 +67,12 @@ const normalizeClassId = (value) => {
 };
 
 const isGlobalClassId = (value) => GLOBAL_CLASS_IDS.has(normalizeClassId(value));
+
+const buildBlankWorkLogEntry = () => ({
+  title: "",
+  notes: "",
+  evidence_link: ""
+});
 
 export default function StudentDashboard() {
   const { user, userData } = useAuth();
@@ -76,6 +92,15 @@ export default function StudentDashboard() {
   const [showMissionModal, setShowMissionModal] = useState(false);
   const [missionCode, setMissionCode] = useState("");
   const [missionError, setMissionError] = useState("");
+  const [workLogPrompts, setWorkLogPrompts] = useState([]);
+  const [workLogsByPromptId, setWorkLogsByPromptId] = useState({});
+  const [showWorkLogModal, setShowWorkLogModal] = useState(false);
+  const [workLogError, setWorkLogError] = useState("");
+  const [workLogSubmitting, setWorkLogSubmitting] = useState(false);
+  const [dismissedWorkLogPromptId, setDismissedWorkLogPromptId] = useState(null);
+  const [workLogForm, setWorkLogForm] = useState({
+    entries: [buildBlankWorkLogEntry()]
+  });
 
   // --- LIVE WALLET STATE ---
   const [stats, setStats] = useState({ 
@@ -366,11 +391,90 @@ export default function StudentDashboard() {
     }));
   }, []);
 
+  const pendingWorkLogPrompts = useMemo(() => (
+    workLogPrompts
+      .filter((prompt) => promptMatchesClasses(prompt, allowedClasses.length > 0 ? allowedClasses : [liveUserData?.class_id].filter(Boolean)))
+      .filter((prompt) => isWorkLogPromptOpen(prompt))
+      .filter((prompt) => !workLogsByPromptId[prompt.id])
+      .sort((left, right) => {
+        const leftDate = getPromptScheduledAt(left);
+        const rightDate = getPromptScheduledAt(right);
+        return (leftDate?.getTime() || 0) - (rightDate?.getTime() || 0);
+      })
+  ), [allowedClasses, liveUserData?.class_id, workLogPrompts, workLogsByPromptId]);
+
+  const activeWorkLogPrompt = pendingWorkLogPrompts[0] || null;
+
   useEffect(() => {
     if (activeEvents.length > 0) {
       setShowEventModal(true);
     }
   }, [activeEvents.length]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, "daily_work_log_prompts"),
+      (snapshot) => {
+        setWorkLogPrompts(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+      },
+      (error) => {
+        console.error("StudentDashboard work log prompt listener failed:", error);
+      }
+    );
+
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const q = query(
+      collection(db, "users", user.uid, "work_logs"),
+      orderBy("log_date", "desc")
+    );
+
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        const nextMap = {};
+        snapshot.docs.forEach((docSnap) => {
+          nextMap[docSnap.id] = { id: docSnap.id, ...docSnap.data() };
+        });
+        setWorkLogsByPromptId(nextMap);
+      },
+      (error) => {
+        console.error("StudentDashboard work log history listener failed:", error);
+      }
+    );
+
+    return () => unsub();
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!activeWorkLogPrompt) {
+      setShowWorkLogModal(false);
+      setDismissedWorkLogPromptId(null);
+      return;
+    }
+
+    if (dismissedWorkLogPromptId && dismissedWorkLogPromptId === activeWorkLogPrompt.id) {
+      const reopenTimer = setTimeout(() => {
+        setShowWorkLogModal(true);
+        setDismissedWorkLogPromptId(null);
+      }, 45000);
+      return () => clearTimeout(reopenTimer);
+    }
+
+    setShowWorkLogModal(true);
+    setWorkLogError("");
+  }, [activeWorkLogPrompt, dismissedWorkLogPromptId]);
+
+  useEffect(() => {
+    if (!activeWorkLogPrompt) return;
+    setWorkLogForm({
+      entries: [buildBlankWorkLogEntry()]
+    });
+  }, [activeWorkLogPrompt?.id]);
 
   // 2. CHECK FOR DAILY MISSIONS (The Intercept)
   useEffect(() => {
@@ -595,6 +699,93 @@ export default function StudentDashboard() {
           console.error("Error claiming mission:", err);
           setMissionError("Connection failed. Try again.");
       }
+  };
+
+  const updateWorkLogEntry = (index, field, value) => {
+    setWorkLogForm((prev) => ({
+      ...prev,
+      entries: prev.entries.map((entry, entryIndex) => (
+        entryIndex === index ? { ...entry, [field]: value } : entry
+      ))
+    }));
+  };
+
+  const addWorkLogEntry = () => {
+    setWorkLogForm((prev) => ({
+      ...prev,
+      entries: [...prev.entries, buildBlankWorkLogEntry()]
+    }));
+  };
+
+  const removeWorkLogEntry = (index) => {
+    setWorkLogForm((prev) => ({
+      ...prev,
+      entries: prev.entries.filter((_, entryIndex) => entryIndex !== index)
+    }));
+  };
+
+  const handleSubmitWorkLog = async (event) => {
+    event.preventDefault();
+    if (!user?.uid || !activeWorkLogPrompt || workLogSubmitting) return;
+
+    const entries = normalizeWorkLogEntries(workLogForm.entries);
+    if (entries.length === 0) {
+      setWorkLogError("Add at least one completed work entry before submitting.");
+      return;
+    }
+
+    setWorkLogSubmitting(true);
+    setWorkLogError("");
+
+    try {
+      const xpBase = Number(activeWorkLogPrompt.reward_xp ?? DEFAULT_WORK_LOG_REWARD.xp) || 0;
+      const cashBase = Number(activeWorkLogPrompt.reward_cash ?? DEFAULT_WORK_LOG_REWARD.cash) || 0;
+      const boostedXp = boostActive
+        ? Math.ceil(xpBase * (1 + boostPercent / 100))
+        : xpBase;
+      const boostedCash = cashBoostActive
+        ? Math.ceil(cashBase * (1 + cashBoostPercent / 100))
+        : cashBase;
+
+      await setDoc(doc(db, "users", user.uid, "work_logs", activeWorkLogPrompt.id), {
+        prompt_id: activeWorkLogPrompt.id,
+        template_id: activeWorkLogPrompt.template_id || null,
+        class_id: activeWorkLogPrompt.class_id || liveUserData?.class_id || "",
+        title: activeWorkLogPrompt.title || "Daily Work Log",
+        instruction: activeWorkLogPrompt.instruction || "",
+        prompt_date: activeWorkLogPrompt.prompt_date || "",
+        prompt_time: activeWorkLogPrompt.prompt_time || DEFAULT_WORK_LOG_TIME,
+        scheduled_for: activeWorkLogPrompt.scheduled_for || "",
+        prompt_end_time: activeWorkLogPrompt.prompt_end_time || DEFAULT_WORK_LOG_END_TIME,
+        end_scheduled_for: activeWorkLogPrompt.end_scheduled_for || "",
+        log_date: activeWorkLogPrompt.prompt_date || new Date().toISOString().split("T")[0],
+        entries,
+        reward_xp: boostedXp,
+        reward_cash: boostedCash,
+        submittedAt: serverTimestamp()
+      }, { merge: true });
+
+      await updateDoc(doc(db, "users", user.uid), {
+        currency: increment(boostedCash),
+        xp: increment(boostedXp)
+      });
+
+      await addDoc(collection(db, "users", user.uid, "alerts"), {
+        type: "success",
+        message: `Daily work log submitted. +${boostedXp} XP and +$${boostedCash}.`,
+        read: false,
+        createdAt: serverTimestamp()
+      });
+
+      setShowWorkLogModal(false);
+      setDismissedWorkLogPromptId(null);
+      setWorkLogForm({ entries: [buildBlankWorkLogEntry()] });
+    } catch (error) {
+      console.error("Daily work log submission failed:", error);
+      setWorkLogError("Submission failed. Try again.");
+    } finally {
+      setWorkLogSubmitting(false);
+    }
   };
 
   const normalizeContractStatus = (status) => {
@@ -1214,6 +1405,138 @@ export default function StudentDashboard() {
 
                 </div>
             </div>
+        </div>
+      )}
+
+      {showWorkLogModal && activeWorkLogPrompt && (
+        <div className="fixed inset-0 z-[110] flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-4xl max-h-[calc(100vh-1.5rem)] rounded-3xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col">
+            <div className="px-5 sm:px-7 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 bg-slate-900 text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">
+                  <Clock size={12} className="text-amber-300" />
+                  End Of Session
+                </div>
+                <h2 className="text-2xl font-black text-slate-900 mt-3">
+                  {activeWorkLogPrompt.title || "Daily Work Log"}
+                </h2>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mt-1">
+                  {activeWorkLogPrompt.class_id} • {activeWorkLogPrompt.prompt_date} • {activeWorkLogPrompt.prompt_time || DEFAULT_WORK_LOG_TIME} - {activeWorkLogPrompt.prompt_end_time || DEFAULT_WORK_LOG_END_TIME}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowWorkLogModal(false);
+                  setDismissedWorkLogPromptId(activeWorkLogPrompt.id);
+                }}
+                className="text-slate-400 hover:text-slate-700 transition"
+                title="Close for now"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-7 overflow-y-auto">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 mb-6">
+                <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                  {activeWorkLogPrompt.instruction || "Summarize what you worked on today. Add one entry for each project or task, and include a link if you have supporting evidence."}
+                </p>
+                <div className="flex flex-wrap items-center gap-2 mt-4 text-xs font-bold">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 px-3 py-1">
+                    <DollarSign size={12}/> ${Number(activeWorkLogPrompt.reward_cash ?? DEFAULT_WORK_LOG_REWARD.cash).toLocaleString()}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 px-3 py-1">
+                    <Zap size={12}/> {Number(activeWorkLogPrompt.reward_xp ?? DEFAULT_WORK_LOG_REWARD.xp).toLocaleString()} {labels.xp}
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmitWorkLog} className="space-y-4">
+                {workLogForm.entries.map((entry, index) => (
+                  <div key={`work-log-entry-${index}`} className="rounded-2xl border border-slate-200 p-4 sm:p-5 bg-white shadow-sm">
+                    <div className="flex items-center justify-between gap-4 mb-4">
+                      <h3 className="text-sm font-black uppercase tracking-wider text-slate-600">
+                        Work Item {index + 1}
+                      </h3>
+                      {workLogForm.entries.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeWorkLogEntry(index)}
+                          className="text-xs font-bold text-red-500 hover:text-red-700"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">
+                          Project / Work Item Title
+                        </label>
+                        <input
+                          type="text"
+                          value={entry.title}
+                          onChange={(event) => updateWorkLogEntry(index, "title", event.target.value)}
+                          placeholder="Optional short title"
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">
+                          What Did You Accomplish?
+                        </label>
+                        <textarea
+                          rows="4"
+                          value={entry.notes}
+                          onChange={(event) => updateWorkLogEntry(index, "notes", event.target.value)}
+                          placeholder="Required. Summarize the work completed for this item."
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 outline-none resize-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">
+                          Evidence Link
+                        </label>
+                        <input
+                          type="text"
+                          value={entry.evidence_link}
+                          onChange={(event) => updateWorkLogEntry(index, "evidence_link", event.target.value)}
+                          placeholder="Optional Google Doc / Drive / screenshot link"
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={addWorkLogEntry}
+                  className="w-full border border-dashed border-slate-300 text-slate-500 text-sm font-bold py-3 rounded-xl hover:border-indigo-400 hover:text-indigo-600 transition"
+                >
+                  + Add Another Work Item
+                </button>
+
+                {workLogError && (
+                  <p className="text-center text-red-600 font-bold text-sm">
+                    {workLogError}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={workLogSubmitting}
+                  className="w-full bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:shadow-xl transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle size={18} />
+                  {workLogSubmitting ? "Submitting Daily Work Log..." : "Submit Daily Work Log"}
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
       )}
 

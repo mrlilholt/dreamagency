@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { db } from "../lib/firebase";
-import { doc, onSnapshot, collection, getDocs, addDoc, serverTimestamp, updateDoc, arrayRemove, getDoc, setDoc, increment } from "firebase/firestore"; // <--- Updated imports
+import { doc, onSnapshot, collection, getDocs, addDoc, serverTimestamp, updateDoc, arrayRemove, getDoc, setDoc, increment, query, orderBy } from "firebase/firestore";
 import Navbar from "../components/Navbar";
 import EggAnchor from "../components/EggAnchor";
 import { 
     Shield, Lock, Calendar, Star, User, Trophy, Medal, Crown, Zap, Target, Award, Rocket, Heart, Flag, DollarSign, Mail, Send, X, Bomb,            // <--- ADD THIS
-    AlertTriangle, Pencil, Save  
+    AlertTriangle, Pencil, Save, FileText
 } from "lucide-react";
 
 // --- ICON MAPPER ---
@@ -41,6 +41,8 @@ export default function AgentProfile() {
   const [eggSolved, setEggSolved] = useState(false);
   const [eggError, setEggError] = useState("");
   const [eggClaiming, setEggClaiming] = useState(false);
+  const [workLogs, setWorkLogs] = useState([]);
+  const [expandedWorkLogIds, setExpandedWorkLogIds] = useState(() => new Set());
 
   const EGG_SEQUENCE = ["bankroll", "mission", "honors"];
   const EGG_BADGE_ID = "egg_hunter_1";
@@ -112,8 +114,22 @@ const hasNameChangeToken = agentData?.inventory?.some(item => item.name === "Ide
 
     fetchBadges();
 
+    const workLogQuery = query(
+        collection(db, "users", user.uid, "work_logs"),
+        orderBy("log_date", "desc")
+    );
+
+    const unsubWorkLogs = onSnapshot(workLogQuery, (snapshot) => {
+        setWorkLogs(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+    }, (error) => {
+        console.error("Error listening to work logs:", error);
+    });
+
     // Cleanup listener on unmount or logout
-    return () => unsubUser();
+    return () => {
+        unsubUser();
+        unsubWorkLogs();
+    };
   }, [user]);
 
   
@@ -180,6 +196,25 @@ const [panicMode, setPanicMode] = useState(false);
   const levelProgress = Math.min(100, Math.round(((xpTotal % 1000) / 1000) * 100));
   const xpToNext = Math.max(0, level * 1000 - xpTotal);
   const hasEggBadge = !!agentData?.badges?.[EGG_BADGE_ID];
+
+  useEffect(() => {
+      setExpandedWorkLogIds((prev) => {
+          if (prev.size > 0) return prev;
+          return new Set(workLogs.slice(0, 2).map((entry) => entry.id));
+      });
+  }, [workLogs]);
+
+  const toggleWorkLogExpanded = (logId) => {
+      setExpandedWorkLogIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(logId)) {
+              next.delete(logId);
+          } else {
+              next.add(logId);
+          }
+          return next;
+      });
+  };
 
   const handleEggStep = (step) => {
       if (showEggModal) return;
@@ -474,6 +509,88 @@ const [panicMode, setPanicMode] = useState(false);
       </div>
 
       <div className="max-w-6xl mx-auto px-6 mt-8">
+        <div className="mb-12">
+           <div className="flex items-center justify-between mb-6">
+             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+               <FileText className="text-indigo-600"/> Daily Work Log
+             </h2>
+             <span className="text-xs font-bold uppercase tracking-widest text-slate-400">
+               {workLogs.length} entries
+             </span>
+           </div>
+
+           {workLogs.length === 0 ? (
+               <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">
+                   No daily work logs yet.
+               </div>
+           ) : (
+               <div className="max-h-[42rem] overflow-y-auto pr-2 space-y-4">
+                 {workLogs.map((log) => (
+                   <div key={log.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                        <div>
+                         <div className="flex items-center gap-2 flex-wrap">
+                           <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-full">
+                             {log.log_date || "No date"}
+                           </span>
+                           <h3 className="text-lg font-bold text-slate-800">{log.title || "Daily Work Log"}</h3>
+                           <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-100 border border-slate-200 px-2 py-1 rounded-full">
+                             {(Array.isArray(log.entries) ? log.entries.length : 0)} items
+                           </span>
+                         </div>
+                         {log.instruction && (
+                           <p className="text-sm text-slate-500 mt-2">{log.instruction}</p>
+                         )}
+                       </div>
+                       <div className="flex items-center gap-2 text-xs font-bold text-slate-500 flex-wrap">
+                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 px-3 py-1">
+                           <DollarSign size={12}/> ${Number(log.reward_cash || 0).toLocaleString()}
+                         </span>
+                         <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 px-3 py-1">
+                           <Zap size={12}/> {Number(log.reward_xp || 0).toLocaleString()} XP
+                         </span>
+                         <button
+                           type="button"
+                           onClick={() => toggleWorkLogExpanded(log.id)}
+                           className="inline-flex items-center gap-1 rounded-full bg-white text-slate-600 border border-slate-200 px-3 py-1 hover:border-indigo-200 hover:text-indigo-700 transition"
+                         >
+                           {expandedWorkLogIds.has(log.id) ? "Collapse" : "Expand"}
+                         </button>
+                       </div>
+                     </div>
+
+                     {expandedWorkLogIds.has(log.id) && (
+                       <div className="mt-4 space-y-3">
+                         {(Array.isArray(log.entries) ? log.entries : []).map((entry, index) => (
+                           <div key={`${log.id}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                             <div className="flex items-start justify-between gap-3">
+                               <div>
+                                 <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                                   {entry.title || `Work Item ${index + 1}`}
+                                 </p>
+                                 <p className="text-sm text-slate-700 mt-2 whitespace-pre-wrap">{entry.notes}</p>
+                               </div>
+                               {entry.evidence_link && (
+                                 <a
+                                   href={entry.evidence_link.startsWith("http") ? entry.evidence_link : `https://${entry.evidence_link}`}
+                                   target="_blank"
+                                   rel="noreferrer"
+                                   className="shrink-0 text-xs font-bold text-indigo-600 hover:text-indigo-700"
+                                 >
+                                   View Link
+                                 </a>
+                               )}
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+                 ))}
+               </div>
+           )}
+        </div>
+
         {/* MEDALS / BADGES SECTION */}
         <div className="mb-12">
            <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">

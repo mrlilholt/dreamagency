@@ -92,6 +92,7 @@ Admin (private + admin role required):
 - `users/{uid}/event_claims/{eventId}`
 - `users/{uid}/egg_progress/{eggId}`
 - `users/{uid}/egg_claims/{eggId}`
+- `users/{uid}/work_logs/{promptId}`
 - `active_jobs/{uid}_{contractId}`
 - `contracts/{contractId}`
 - `events/{eventId}`
@@ -104,6 +105,8 @@ Admin (private + admin role required):
 - `badges/{badgeId}`
 - `suggestions/{suggestionId}`
 - `daily_missions/{missionId}`
+- `daily_work_log_templates/{templateId}`
+- `daily_work_log_prompts/{promptId}`
 - `classes/{classId}`
 - `admin_student_metrics/{metricId}`
 - `side_hustles/{sideHustleId}`
@@ -117,6 +120,7 @@ Source: `firestore.rules`.
 - Egg system collections are admin-write and user-claim scoped in rules.
 - `users/{uid}` writes are now self-or-admin.
 - `admin_student_metrics/{metricId}` is admin-only and stores per-class manual productivity overrides for analytics reports.
+- Daily work log templates/prompts are admin-managed; student submissions live under `users/{uid}/work_logs/{promptId}` and are self-or-admin in rules.
 - Some legacy collections remain permissive for current velocity.
 - If a feature should become admin-only, update both UI checks and `firestore.rules`.
 
@@ -152,6 +156,15 @@ Important enums in active logic:
 
 - `src/pages/dashboard/StudentDashboard.jsx`
 - `src/lib/eventUtils.js`
+
+### Daily work log templates, prompt scheduling, student submissions, analytics view
+
+- `src/pages/dashboard/AdminDashboard.jsx`
+- `src/pages/dashboard/StudentDashboard.jsx`
+- `src/pages/admin/AdminAnalytics.jsx`
+- `src/lib/adminAnalytics.js`
+- `src/lib/workLogs.js`
+- `firestore.rules`
 
 ### Contract lifecycle (create/edit/list/student detail)
 
@@ -265,6 +278,8 @@ If this breaks, check these files first:
   `src/context/ThemeContext.jsx`, `src/lib/themeConfig.js`, `src/index.css`
 - Student report / productivity score looks wrong:
   `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`, `firestore.rules`
+- Daily work log popup/history missing or scheduling wrong:
+  `src/pages/dashboard/AdminDashboard.jsx`, `src/pages/dashboard/StudentDashboard.jsx`, `src/lib/workLogs.js`, `firestore.rules`
 - PWA install behavior/cache issues:
   `src/components/InstallBanner.jsx`, `public/service-worker.js`, `public/manifest.webmanifest`
 - Egg not appearing / wrong trigger / claim issue:
@@ -299,6 +314,7 @@ Use these keywords in tickets/prompts for fast navigation:
 - `ROSTER_OPS` -> `src/pages/admin/AdminRoster.jsx`
 - `ANALYTICS` -> `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`
 - `PRODUCTIVITY_REPORTS` -> `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`, `firestore.rules`
+- `DAILY_WORK_LOGS` -> `src/pages/dashboard/AdminDashboard.jsx`, `src/pages/dashboard/StudentDashboard.jsx`, `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`, `src/lib/workLogs.js`, `firestore.rules`
 - `LEADERBOARD` -> `src/pages/Leaderboard.jsx`
 - `THEME_SYSTEM` -> `src/context/ThemeContext.jsx`, `src/lib/themeConfig.js`, `src/index.css`
 - `PWA` -> `src/main.jsx`, `src/components/InstallBanner.jsx`, `public/service-worker.js`, `public/manifest.webmanifest`

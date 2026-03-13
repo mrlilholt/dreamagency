@@ -34,6 +34,7 @@ import {
     TrendingDown,
     RotateCcw,
     Calendar,
+    Clock,
     Rocket,
     DollarSign,
     RefreshCw, 
@@ -53,6 +54,15 @@ import {
     getOneTimeEvents,
     filterEventsByClaims
 } from "../../lib/eventUtils";
+import {
+    buildWorkLogPromptId,
+    DEFAULT_WORK_LOG_END_TIME,
+    DEFAULT_WORK_LOG_REWARD,
+    DEFAULT_WORK_LOG_TIME,
+    getLocalDateString,
+    getPromptDateKey,
+    normalizeScheduledDates
+} from "../../lib/workLogs";
 // --- ICON LIST (For Shop) ---
 const AVAILABLE_ICONS = [
     "life-buoy", "map-pin", "briefcase", "pen-tool", "clock", 
@@ -77,6 +87,20 @@ const getAutoLevelRewards = (levelNumber) => {
     };
 };
 const MAX_SIDE_HUSTLE_IMAGE_BYTES = 350 * 1024;
+
+const buildWorkLogFormState = (overrides = {}) => ({
+    title: "",
+    instruction: "",
+    class_id: "all",
+    reward_xp: DEFAULT_WORK_LOG_REWARD.xp,
+    reward_cash: DEFAULT_WORK_LOG_REWARD.cash,
+    prompt_time: DEFAULT_WORK_LOG_TIME,
+    prompt_end_time: DEFAULT_WORK_LOG_END_TIME,
+    selected_dates: [],
+    pending_date: "",
+    ...overrides
+});
+
 const formatSideHustleStatus = (status, scheduledDate) => {
     if (status === "archived") return "Archived";
     if (status !== "scheduled") return "Live";
@@ -159,6 +183,12 @@ const [viewArchive, setViewArchive] = useState(false);
 const [showDailyMissions, setShowDailyMissions] = useState(false);  
 const [missions, setMissions] = useState([]);
   const [editingMissionId, setEditingMissionId] = useState(null);
+  const [showWorkLogManager, setShowWorkLogManager] = useState(false);
+  const [workLogTemplates, setWorkLogTemplates] = useState([]);
+  const [workLogPrompts, setWorkLogPrompts] = useState([]);
+  const [editingWorkLogTemplateId, setEditingWorkLogTemplateId] = useState(null);
+  const [viewWorkLogArchive, setViewWorkLogArchive] = useState(false);
+  const [workLogForm, setWorkLogForm] = useState(buildWorkLogFormState());
   // --- SIDE HUSTLES STATE ---
   const [sideHustles, setSideHustles] = useState([]);
   const [sideHustleSubmissions, setSideHustleSubmissions] = useState([]);
@@ -196,6 +226,19 @@ const [missions, setMissions] = useState([]);
   
   const activeMissions = missions.filter(m => m.active_date >= todayDate);
   const archivedMissions = missions.filter(m => m.active_date < todayDate);
+  const localTodayDate = getLocalDateString();
+  const upcomingWorkLogPrompts = workLogPrompts.filter((prompt) => getPromptDateKey(prompt) >= localTodayDate);
+  const archivedWorkLogPrompts = workLogPrompts.filter((prompt) => getPromptDateKey(prompt) < localTodayDate);
+  const workLogClassOptions = Array.from(
+      new Set(["all", ...Object.values(CLASS_CODES).map((entry) => entry.id), ...availableClasses])
+  );
+
+  const resetWorkLogForm = () => {
+      setWorkLogForm(buildWorkLogFormState({
+          class_id: workLogClassOptions[0] || "all"
+      }));
+      setEditingWorkLogTemplateId(null);
+  };
   // --- REDEPLOY FUNCTION ---
   // Takes an old mission and puts it back in the form
   const handleRedeploy = (mission) => {
@@ -289,6 +332,22 @@ const [missions, setMissions] = useState([]);
       return () => unsub();
   }, []);
 
+  useEffect(() => {
+      const q = query(collection(db, "daily_work_log_templates"), orderBy("updatedAt", "desc"));
+      const unsub = onSnapshot(q, (snap) => {
+          setWorkLogTemplates(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      });
+      return () => unsub();
+  }, []);
+
+  useEffect(() => {
+      const q = query(collection(db, "daily_work_log_prompts"), orderBy("prompt_date", "desc"));
+      const unsub = onSnapshot(q, (snap) => {
+          setWorkLogPrompts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      });
+      return () => unsub();
+  }, []);
+
   // FETCH SIDE HUSTLES
   useEffect(() => {
       const unsub = onSnapshot(collection(db, "side_hustles"), (snap) => {
@@ -333,6 +392,15 @@ const [missions, setMissions] = useState([]);
       }
   }, [availableClasses, newMission.class_id]);
 
+  useEffect(() => {
+      if (!workLogForm.class_id && workLogClassOptions.length > 0) {
+          setWorkLogForm((prev) => ({
+              ...prev,
+              class_id: workLogClassOptions[0]
+          }));
+      }
+  }, [workLogForm.class_id, workLogClassOptions]);
+
   const handleCreateMission = async (e) => {
       e.preventDefault();
       try {
@@ -357,6 +425,221 @@ const [missions, setMissions] = useState([]);
       if(confirm("Delete this mission?")) {
           await deleteDoc(doc(db, "daily_missions", id));
       }
+  };
+
+  const scheduleWorkLogPrompts = async (templateId, formState) => {
+      const scheduledDates = normalizeScheduledDates(formState.selected_dates);
+      if (scheduledDates.length === 0) {
+          throw new Error("Add at least one scheduled date.");
+      }
+
+      const batch = writeBatch(db);
+      scheduledDates.forEach((promptDate) => {
+          const promptId = buildWorkLogPromptId({
+              templateId,
+              classId: formState.class_id,
+              promptDate,
+              time: formState.prompt_time
+          });
+          batch.set(doc(db, "daily_work_log_prompts", promptId), {
+              template_id: templateId,
+              class_id: formState.class_id,
+              title: formState.title.trim(),
+              instruction: formState.instruction.trim(),
+              prompt_date: promptDate,
+              prompt_time: formState.prompt_time,
+              prompt_end_time: formState.prompt_end_time,
+              scheduled_for: `${promptDate}T${formState.prompt_time}:00`,
+              end_scheduled_for: `${promptDate}T${formState.prompt_end_time}:00`,
+              reward_xp: Number(formState.reward_xp) || 0,
+              reward_cash: Number(formState.reward_cash) || 0,
+              status: "active",
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+          }, { merge: true });
+      });
+      await batch.commit();
+  };
+
+  const handleSaveWorkLogTemplate = async (event) => {
+      event.preventDefault();
+
+      if (!workLogForm.title.trim() || !workLogForm.instruction.trim()) {
+          alert("Please add a title and instructions.");
+          return;
+      }
+      if ((workLogForm.prompt_end_time || "") <= (workLogForm.prompt_time || "")) {
+          alert("End time must be later than the start time.");
+          return;
+      }
+
+      try {
+          const templatePayload = {
+              title: workLogForm.title.trim(),
+              instruction: workLogForm.instruction.trim(),
+              class_id: workLogForm.class_id || "all",
+              reward_xp: Number(workLogForm.reward_xp) || 0,
+              reward_cash: Number(workLogForm.reward_cash) || 0,
+              default_time: workLogForm.prompt_time || DEFAULT_WORK_LOG_TIME,
+              default_end_time: workLogForm.prompt_end_time || DEFAULT_WORK_LOG_END_TIME,
+              updatedAt: serverTimestamp()
+          };
+
+          let templateId = editingWorkLogTemplateId;
+          if (templateId) {
+              await updateDoc(doc(db, "daily_work_log_templates", templateId), templatePayload);
+          } else {
+              const created = await addDoc(collection(db, "daily_work_log_templates"), {
+                  ...templatePayload,
+                  createdAt: serverTimestamp()
+              });
+              templateId = created.id;
+          }
+
+          await scheduleWorkLogPrompts(templateId, workLogForm);
+          alert(editingWorkLogTemplateId ? "Template updated and dates scheduled." : "Template saved and dates scheduled.");
+          resetWorkLogForm();
+      } catch (error) {
+          console.error("Work log template save failed:", error);
+          alert(error.message || "Failed to save work log template.");
+      }
+  };
+
+  const loadWorkLogTemplate = (template) => {
+      setWorkLogForm(buildWorkLogFormState({
+          title: template.title || "",
+          instruction: template.instruction || "",
+          class_id: template.class_id || "all",
+          reward_xp: Number(template.reward_xp ?? DEFAULT_WORK_LOG_REWARD.xp),
+          reward_cash: Number(template.reward_cash ?? DEFAULT_WORK_LOG_REWARD.cash),
+          prompt_time: template.default_time || template.prompt_time || DEFAULT_WORK_LOG_TIME,
+          prompt_end_time: template.default_end_time || template.prompt_end_time || DEFAULT_WORK_LOG_END_TIME
+      }));
+      setEditingWorkLogTemplateId(template.id);
+      setShowWorkLogManager(true);
+  };
+
+  const handleDeleteWorkLogTemplate = async (templateId) => {
+      if (!confirm("Delete this work log template? Scheduled prompts already created will stay in place.")) {
+          return;
+      }
+      await deleteDoc(doc(db, "daily_work_log_templates", templateId));
+      if (editingWorkLogTemplateId === templateId) {
+          resetWorkLogForm();
+      }
+  };
+
+  const handleDeleteWorkLogPrompt = async (promptId) => {
+      if (!confirm("Delete this scheduled work log prompt?")) return;
+      await deleteDoc(doc(db, "daily_work_log_prompts", promptId));
+  };
+
+  const duplicateWorkLogTemplateToClass = async (template) => {
+      const suggestedClass = workLogClassOptions.find((option) => option !== template.class_id) || "all";
+      const targetClassId = window.prompt("Duplicate this work log template to which class ID?", suggestedClass);
+      if (!targetClassId) return;
+
+      try {
+          const duplicate = await addDoc(collection(db, "daily_work_log_templates"), {
+              title: template.title || "",
+              instruction: template.instruction || "",
+              class_id: targetClassId,
+              reward_xp: Number(template.reward_xp ?? DEFAULT_WORK_LOG_REWARD.xp),
+              reward_cash: Number(template.reward_cash ?? DEFAULT_WORK_LOG_REWARD.cash),
+              default_time: template.default_time || DEFAULT_WORK_LOG_TIME,
+              default_end_time: template.default_end_time || DEFAULT_WORK_LOG_END_TIME,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+          });
+
+          const futurePrompts = workLogPrompts.filter(
+              (prompt) => prompt.template_id === template.id && getPromptDateKey(prompt) >= localTodayDate
+          );
+          if (futurePrompts.length > 0) {
+              const batch = writeBatch(db);
+              futurePrompts.forEach((prompt) => {
+                  const nextId = buildWorkLogPromptId({
+                      templateId: duplicate.id,
+                      classId: targetClassId,
+                      promptDate: prompt.prompt_date,
+                      time: prompt.prompt_time || template.default_time || DEFAULT_WORK_LOG_TIME
+                  });
+                  batch.set(doc(db, "daily_work_log_prompts", nextId), {
+                      template_id: duplicate.id,
+                      class_id: targetClassId,
+                      title: prompt.title || template.title || "",
+                      instruction: prompt.instruction || template.instruction || "",
+                      prompt_date: prompt.prompt_date,
+                      prompt_time: prompt.prompt_time || template.default_time || DEFAULT_WORK_LOG_TIME,
+                      prompt_end_time: prompt.prompt_end_time || template.default_end_time || DEFAULT_WORK_LOG_END_TIME,
+                      scheduled_for: prompt.scheduled_for || `${prompt.prompt_date}T${prompt.prompt_time || template.default_time || DEFAULT_WORK_LOG_TIME}:00`,
+                      end_scheduled_for: prompt.end_scheduled_for || `${prompt.prompt_date}T${prompt.prompt_end_time || template.default_end_time || DEFAULT_WORK_LOG_END_TIME}:00`,
+                      reward_xp: Number(prompt.reward_xp ?? template.reward_xp ?? DEFAULT_WORK_LOG_REWARD.xp),
+                      reward_cash: Number(prompt.reward_cash ?? template.reward_cash ?? DEFAULT_WORK_LOG_REWARD.cash),
+                      status: prompt.status || "active",
+                      createdAt: serverTimestamp(),
+                      updatedAt: serverTimestamp()
+                  }, { merge: true });
+              });
+              await batch.commit();
+          }
+
+          alert(`Template duplicated to ${targetClassId}.`);
+      } catch (error) {
+          console.error("Work log duplication failed:", error);
+          alert("Failed to duplicate work log template.");
+      }
+  };
+
+  const duplicateWorkLogPromptToClass = async (prompt) => {
+      const suggestedClass = workLogClassOptions.find((option) => option !== prompt.class_id) || "all";
+      const targetClassId = window.prompt("Duplicate this scheduled work log prompt to which class ID?", suggestedClass);
+      if (!targetClassId) return;
+
+      try {
+          const nextId = buildWorkLogPromptId({
+              templateId: prompt.template_id || "adhoc",
+              classId: targetClassId,
+              promptDate: prompt.prompt_date,
+              time: prompt.prompt_time || DEFAULT_WORK_LOG_TIME
+          });
+          await setDoc(doc(db, "daily_work_log_prompts", nextId), {
+              template_id: prompt.template_id || null,
+              class_id: targetClassId,
+              title: prompt.title || "Daily Work Log",
+              instruction: prompt.instruction || "",
+              prompt_date: prompt.prompt_date,
+              prompt_time: prompt.prompt_time || DEFAULT_WORK_LOG_TIME,
+              prompt_end_time: prompt.prompt_end_time || DEFAULT_WORK_LOG_END_TIME,
+              reward_xp: Number(prompt.reward_xp ?? DEFAULT_WORK_LOG_REWARD.xp),
+              reward_cash: Number(prompt.reward_cash ?? DEFAULT_WORK_LOG_REWARD.cash),
+              status: prompt.status || "active",
+              scheduled_for: prompt.scheduled_for || `${prompt.prompt_date}T${prompt.prompt_time || DEFAULT_WORK_LOG_TIME}:00`,
+              end_scheduled_for: prompt.end_scheduled_for || `${prompt.prompt_date}T${prompt.prompt_end_time || DEFAULT_WORK_LOG_END_TIME}:00`,
+              updatedAt: serverTimestamp()
+          }, { merge: true });
+          alert(`Scheduled prompt duplicated to ${targetClassId}.`);
+      } catch (error) {
+          console.error("Work log prompt duplication failed:", error);
+          alert("Failed to duplicate scheduled work log.");
+      }
+  };
+
+  const addSelectedWorkLogDate = () => {
+      const nextDate = workLogForm.pending_date;
+      if (!nextDate) return;
+      setWorkLogForm((prev) => ({
+          ...prev,
+          selected_dates: normalizeScheduledDates([...prev.selected_dates, nextDate]),
+          pending_date: ""
+      }));
+  };
+
+  const removeSelectedWorkLogDate = (dateValue) => {
+      setWorkLogForm((prev) => ({
+          ...prev,
+          selected_dates: prev.selected_dates.filter((entry) => entry !== dateValue)
+      }));
   };
 
   const resetSideHustleForm = () => {
@@ -1403,6 +1686,26 @@ const [missions, setMissions] = useState([]);
                                 </div>
                                 <button
                                     onClick={() => setShowSideHustleEditor(true)}
+                                    className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition"
+                                >
+                                    Open Manager
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <p className="text-slate-400 text-xs font-bold uppercase">Daily Work Logs</p>
+                                    <p className="text-slate-500 text-xs">Reusable templates with explicit class dates and timed student popups.</p>
+                                    <div className="flex items-center gap-2 mt-2 text-[10px] font-bold uppercase text-slate-400">
+                                        <span>{workLogTemplates.length} templates</span>
+                                        <span className="text-slate-300">•</span>
+                                        <span>{upcomingWorkLogPrompts.length} upcoming</span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowWorkLogManager(true)}
                                     className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition"
                                 >
                                     Open Manager
@@ -2519,6 +2822,308 @@ const [missions, setMissions] = useState([]);
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {showWorkLogManager && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                    <div>
+                        <h2 className="font-black text-lg text-slate-800 flex items-center gap-2">
+                            <Calendar className="text-indigo-600"/> DAILY WORK LOG MANAGER
+                        </h2>
+                        <p className="text-xs text-slate-500 mt-1">
+                            Save reusable templates, choose exact class dates, and duplicate by class when needed.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => {
+                            setShowWorkLogManager(false);
+                            resetWorkLogForm();
+                        }}
+                        className="p-2 hover:bg-slate-200 rounded-full transition"
+                    >
+                        <X size={20} className="text-slate-500" />
+                    </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto bg-slate-50/60">
+                    <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                        <div className="xl:col-span-2 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-bold text-slate-800">
+                                    {editingWorkLogTemplateId ? "Update Template + Schedule Dates" : "New Template + Schedule Dates"}
+                                </h3>
+                                {editingWorkLogTemplateId && (
+                                    <button
+                                        type="button"
+                                        onClick={resetWorkLogForm}
+                                        className="text-xs font-bold text-red-500 hover:text-red-700 underline"
+                                    >
+                                        Cancel
+                                    </button>
+                                )}
+                            </div>
+
+                            <form onSubmit={handleSaveWorkLogTemplate} className="space-y-4">
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Target Class</label>
+                                        <select
+                                            className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                                            value={workLogForm.class_id}
+                                            onChange={(event) => setWorkLogForm((prev) => ({ ...prev, class_id: event.target.value }))}
+                                        >
+                                            {workLogClassOptions.map((classId) => (
+                                                <option key={classId} value={classId}>
+                                                    {classId === "all" ? "All Classes" : classId}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Start Time</label>
+                                        <input
+                                            type="time"
+                                            className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                                            value={workLogForm.prompt_time}
+                                            onChange={(event) => setWorkLogForm((prev) => ({ ...prev, prompt_time: event.target.value }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">End Time</label>
+                                        <input
+                                            type="time"
+                                            className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                                            value={workLogForm.prompt_end_time}
+                                            onChange={(event) => setWorkLogForm((prev) => ({ ...prev, prompt_end_time: event.target.value }))}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Template Title</label>
+                                    <input
+                                        type="text"
+                                        className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 placeholder:text-slate-300 focus:border-indigo-500 outline-none"
+                                        placeholder="Daily Work Log"
+                                        value={workLogForm.title}
+                                        onChange={(event) => setWorkLogForm((prev) => ({ ...prev, title: event.target.value }))}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Prompt Instructions</label>
+                                    <textarea
+                                        rows="4"
+                                        className="w-full p-2 rounded-lg border border-slate-300 text-sm text-slate-600 placeholder:text-slate-300 focus:border-indigo-500 outline-none resize-none"
+                                        placeholder="Ask students to summarize what they worked on, add links, and break it into multiple project entries."
+                                        value={workLogForm.instruction}
+                                        onChange={(event) => setWorkLogForm((prev) => ({ ...prev, instruction: event.target.value }))}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Reward Cash ($)</label>
+                                        <input
+                                            type="number"
+                                            className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                                            value={workLogForm.reward_cash}
+                                            onChange={(event) => setWorkLogForm((prev) => ({ ...prev, reward_cash: Number(event.target.value) }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Reward XP</label>
+                                        <input
+                                            type="number"
+                                            className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                                            value={workLogForm.reward_xp}
+                                            onChange={(event) => setWorkLogForm((prev) => ({ ...prev, reward_xp: Number(event.target.value) }))}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Scheduled Dates</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="date"
+                                            className="flex-1 p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                                            value={workLogForm.pending_date}
+                                            onChange={(event) => setWorkLogForm((prev) => ({ ...prev, pending_date: event.target.value }))}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={addSelectedWorkLogDate}
+                                            className="px-4 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition"
+                                        >
+                                            Add Date
+                                        </button>
+                                    </div>
+                                    <div className="mt-3 min-h-12 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3">
+                                        {workLogForm.selected_dates.length === 0 ? (
+                                            <p className="text-xs text-slate-400">No dates selected yet.</p>
+                                        ) : (
+                                            <div className="flex flex-wrap gap-2">
+                                                {workLogForm.selected_dates.map((dateValue) => (
+                                                    <button
+                                                        key={dateValue}
+                                                        type="button"
+                                                        onClick={() => removeSelectedWorkLogDate(dateValue)}
+                                                        className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700"
+                                                        title="Remove date"
+                                                    >
+                                                        <span>{dateValue}</span>
+                                                        <X size={12} />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-2">
+                                        Add exact class dates one at a time. Each selected date gets its own work-log window, which keeps snow days and missed classes easy to manage.
+                                    </p>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    className="w-full py-3 rounded-xl font-bold text-white shadow-lg transition flex items-center justify-center gap-2 bg-slate-900 hover:bg-indigo-600 shadow-slate-300"
+                                >
+                                    {editingWorkLogTemplateId ? <><Pencil size={18}/> Update Template + Schedule</> : <><Rocket size={18}/> Save Template + Schedule</>}
+                                </button>
+                            </form>
+                        </div>
+
+                        <div className="xl:col-span-3 space-y-6">
+                            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-bold text-slate-800">Saved Templates</h3>
+                                    <span className="text-xs text-slate-400">{workLogTemplates.length} total</span>
+                                </div>
+                                {workLogTemplates.length === 0 ? (
+                                    <div className="p-8 text-center border border-dashed border-slate-200 rounded-xl text-slate-400 text-sm">
+                                        No work log templates yet.
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
+                                        {workLogTemplates.map((template) => (
+                                            <div key={template.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                            <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded uppercase tracking-wide">
+                                                                {template.class_id || "all"}
+                                                            </span>
+                                                            <h4 className="font-bold text-slate-800">{template.title || "Untitled Template"}</h4>
+                                                        </div>
+                                                        <p className="text-sm text-slate-500 line-clamp-2">{template.instruction}</p>
+                                                        <div className="flex items-center gap-4 text-xs font-bold text-slate-400 mt-2">
+                                                            <span className="flex items-center gap-1"><Clock size={12}/> {template.default_time || DEFAULT_WORK_LOG_TIME} - {template.default_end_time || DEFAULT_WORK_LOG_END_TIME}</span>
+                                                            <span className="flex items-center gap-1"><Zap size={12}/> {template.reward_xp ?? DEFAULT_WORK_LOG_REWARD.xp}</span>
+                                                            <span className="flex items-center gap-1"><DollarSign size={12}/> ${template.reward_cash ?? DEFAULT_WORK_LOG_REWARD.cash}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => loadWorkLogTemplate(template)}
+                                                            className="p-2 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
+                                                            title="Load into scheduler"
+                                                        >
+                                                            <Pencil size={16} />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => duplicateWorkLogTemplateToClass(template)}
+                                                            className="p-2 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
+                                                            title="Duplicate to another class"
+                                                        >
+                                                            <Copy size={16} />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteWorkLogTemplate(template.id)}
+                                                            className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition"
+                                                            title="Delete template"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                                    <h3 className="font-bold text-slate-800">
+                                        {viewWorkLogArchive ? "Scheduled History" : "Upcoming Scheduled Prompts"}
+                                    </h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => setViewWorkLogArchive((prev) => !prev)}
+                                        className="text-xs font-bold text-slate-400 hover:text-indigo-600 transition flex items-center gap-2"
+                                    >
+                                        {viewWorkLogArchive ? <>View Upcoming <ArrowRight size={14} /></> : <><History size={14}/> View History</>}
+                                    </button>
+                                </div>
+
+                                {(viewWorkLogArchive ? archivedWorkLogPrompts : upcomingWorkLogPrompts).length === 0 ? (
+                                    <div className="p-8 text-center border border-dashed border-slate-200 rounded-xl text-slate-400 text-sm">
+                                        {viewWorkLogArchive ? "No past work log prompts found." : "No work log prompts are scheduled yet."}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                                        {(viewWorkLogArchive ? archivedWorkLogPrompts : upcomingWorkLogPrompts).map((prompt) => (
+                                            <div key={prompt.id} className="border border-slate-200 rounded-xl p-4 bg-white">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded uppercase tracking-wide border border-indigo-100">
+                                                                {prompt.class_id || "all"}
+                                                            </span>
+                                                            <h4 className="font-bold text-slate-800">{prompt.title || "Daily Work Log"}</h4>
+                                                        </div>
+                                                        <p className="text-sm text-slate-500 mt-1 line-clamp-2">{prompt.instruction}</p>
+                                                        <div className="flex items-center gap-4 text-xs font-bold text-slate-400 mt-2 flex-wrap">
+                                                            <span className="flex items-center gap-1"><Calendar size={12}/> {prompt.prompt_date}</span>
+                                                            <span className="flex items-center gap-1"><Clock size={12}/> {prompt.prompt_time || DEFAULT_WORK_LOG_TIME} - {prompt.prompt_end_time || DEFAULT_WORK_LOG_END_TIME}</span>
+                                                            <span className="flex items-center gap-1"><Zap size={12}/> {prompt.reward_xp ?? DEFAULT_WORK_LOG_REWARD.xp}</span>
+                                                            <span className="flex items-center gap-1"><DollarSign size={12}/> ${prompt.reward_cash ?? DEFAULT_WORK_LOG_REWARD.cash}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => duplicateWorkLogPromptToClass(prompt)}
+                                                            className="p-2 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
+                                                            title="Duplicate scheduled prompt to another class"
+                                                        >
+                                                            <Copy size={16} />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteWorkLogPrompt(prompt.id)}
+                                                            className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition"
+                                                            title="Delete scheduled prompt"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

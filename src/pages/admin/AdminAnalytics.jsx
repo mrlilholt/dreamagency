@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, orderBy, serverTimestamp, setDoc } from "firebase/firestore";
 import {
   Activity,
   Briefcase,
@@ -126,6 +126,7 @@ export default function AdminAnalytics() {
   const [missions, setMissions] = useState([]);
   const [sideHustles, setSideHustles] = useState([]);
   const [sideHustleJobs, setSideHustleJobs] = useState([]);
+  const [selectedStudentWorkLogs, setSelectedStudentWorkLogs] = useState([]);
   const [productivityMetrics, setProductivityMetrics] = useState([]);
   const [readyState, setReadyState] = useState(READY_STATE);
 
@@ -418,7 +419,8 @@ export default function AdminAnalytics() {
         missions,
         sideHustles,
         studentJobs: jobsByStudentId[student.id] || [],
-        studentSideHustleJobs: sideHustleJobsByStudentId[student.id] || []
+        studentSideHustleJobs: sideHustleJobsByStudentId[student.id] || [],
+        studentWorkLogs: student.id === selectedStudentId ? selectedStudentWorkLogs : []
       });
       const metric = productivityByKey[`${normalizeClassId(selectedClassId)}::${student.id}`] || null;
       const effectiveProductivityScore = getEffectiveProductivityScore(report, metric);
@@ -454,6 +456,35 @@ export default function AdminAnalytics() {
   const selectedStudentEntry = classStudentEntries.find(
     (entry) => entry.student.id === activeSelectedStudentId
   ) || null;
+
+  useEffect(() => {
+    if (!activeSelectedStudentId) {
+      setSelectedStudentWorkLogs([]);
+      return;
+    }
+
+    const workLogQuery = query(
+      collection(db, "users", activeSelectedStudentId, "work_logs"),
+      orderBy("log_date", "desc")
+    );
+
+    const unsub = onSnapshot(
+      workLogQuery,
+      (snapshot) => {
+        setSelectedStudentWorkLogs(snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          studentId: activeSelectedStudentId,
+          ...docSnap.data()
+        })));
+      },
+      (error) => {
+        console.error("AdminAnalytics selected student work logs listener failed:", error);
+        setSelectedStudentWorkLogs([]);
+      }
+    );
+
+    return () => unsub();
+  }, [activeSelectedStudentId]);
 
   const selectedMetric = selectedStudentEntry?.metric || null;
   const selectedManualScore =
@@ -1616,6 +1647,92 @@ export default function AdminAnalytics() {
                                     className="px-4 py-8 text-center text-slate-400 italic"
                                   >
                                     No class side hustles found.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
+
+                      <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <FileText size={18} className="text-indigo-500" />
+                            <h4 className="font-bold text-slate-900">Daily Work Logs</h4>
+                          </div>
+                          <span className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                            {selectedStudentEntry.report.workLogRows.length} total
+                          </span>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] tracking-widest">
+                              <tr>
+                                <th className="px-4 py-3 text-left">Date</th>
+                                <th className="px-4 py-3 text-left">Prompt</th>
+                                <th className="px-4 py-3 text-left">Entries</th>
+                                <th className="px-4 py-3 text-left">Links</th>
+                                <th className="px-4 py-3 text-left">Reward</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedStudentEntry.report.workLogRows.map((row) => (
+                                <tr key={row.id} className="border-t border-slate-100 align-top">
+                                  <td className="px-4 py-4 text-slate-600">
+                                    {row.logDate ? formatDateLabel(`${row.logDate}T12:00:00`) : "-"}
+                                  </td>
+                                  <td className="px-4 py-4">
+                                    <div className="font-semibold text-slate-900">{row.title}</div>
+                                    <div className="text-xs text-slate-500 mt-1">
+                                      Submitted {formatDateTimeLabel(row.submittedAt)}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4">
+                                    <div className="space-y-2">
+                                      {row.entries.map((entry, index) => (
+                                        <div key={`${row.id}-${index}`} className="text-slate-600">
+                                          <div className="font-semibold text-slate-800">
+                                            {entry.title || `Work Item ${index + 1}`}
+                                          </div>
+                                          <div className="text-xs text-slate-500 whitespace-pre-wrap">
+                                            {entry.notes}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4">
+                                    <div className="space-y-2">
+                                      {row.entries.some((entry) => entry.evidence_link) ? row.entries.map((entry, index) => (
+                                        entry.evidence_link ? (
+                                          <a
+                                            key={`${row.id}-link-${index}`}
+                                            href={entry.evidence_link}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="block text-indigo-600 hover:text-indigo-700 break-all"
+                                          >
+                                            {entry.title || `Link ${index + 1}`}
+                                          </a>
+                                        ) : null
+                                      )) : (
+                                        <span className="text-slate-400">No links</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4 text-slate-600">
+                                    +{row.rewardXp} XP / ${row.rewardCash}
+                                  </td>
+                                </tr>
+                              ))}
+                              {selectedStudentEntry.report.workLogRows.length === 0 && (
+                                <tr>
+                                  <td
+                                    colSpan="5"
+                                    className="px-4 py-8 text-center text-slate-400 italic"
+                                  >
+                                    No daily work logs found.
                                   </td>
                                 </tr>
                               )}

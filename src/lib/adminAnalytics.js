@@ -235,7 +235,8 @@ export const buildStudentWorkReport = ({
   missions = [],
   sideHustles = [],
   studentJobs = [],
-  studentSideHustleJobs = []
+  studentSideHustleJobs = [],
+  studentWorkLogs = []
 }) => {
   const completedMissionIds = new Set(
     Array.isArray(student?.completed_missions) ? student.completed_missions : []
@@ -346,6 +347,21 @@ export const buildStudentWorkReport = ({
       })
   );
 
+  const workLogRows = studentWorkLogs
+    .filter((entry) => itemMatchesClass(entry, classId))
+    .map((entry) => ({
+      id: entry.id,
+      title: entry.title || "Daily Work Log",
+      logDate: entry.log_date || entry.prompt_date || "",
+      promptTime: entry.prompt_time || "",
+      submittedAt: toDate(entry.submittedAt),
+      rewardXp: Number(entry.reward_xp || 0),
+      rewardCash: Number(entry.reward_cash || 0),
+      entries: Array.isArray(entry.entries) ? entry.entries : [],
+      entryCount: Array.isArray(entry.entries) ? entry.entries.length : 0
+    }))
+    .sort((left, right) => `${right.logDate || ""}`.localeCompare(`${left.logDate || ""}`));
+
   const contractCompletedCount = contractRows.filter((row) => row.completed).length;
   const missionCompletedCount = missionRows.filter((row) => row.completed).length;
   const sideHustleCompletedCount = sideHustleRows.filter((row) => row.completed).length;
@@ -366,6 +382,7 @@ export const buildStudentWorkReport = ({
     contractRows,
     missionRows,
     sideHustleRows,
+    workLogRows,
     contractCompletedCount,
     missionCompletedCount,
     sideHustleCompletedCount,

@@ -12,6 +12,7 @@ All notable changes to this project should be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Added a reusable Daily Work Log system with admin-managed templates, exact-date scheduling, duplicate-by-class actions, student blocking popup submission, reward payouts, dashboard history, analytics drill-down visibility, shared work-log helpers, and matching Firestore rules (`src/pages/dashboard/AdminDashboard.jsx`, `src/pages/dashboard/StudentDashboard.jsx`, `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`, `src/lib/workLogs.js`, `firestore.rules`).
 - Added a fallback onboarding class for `CS-ACCESS` that creates the `Computer Science Quarter 4` class record on first use so new users can join and the class behaves like the existing roster/classes setup (`src/lib/gameConfig.js`, `src/pages/Onboarding.jsx`).
 - Added an admin analytics student-work drill-down with class -> student selection, backfilled contract/mission/side-hustle reporting, printable reports, CSV export, and per-class productivity overrides (`src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`).
 - Added admin-only analytics override storage in `admin_student_metrics/{metricId}` with matching Firestore rules (`firestore.rules`).
