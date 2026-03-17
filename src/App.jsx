@@ -21,6 +21,7 @@ import AdminRoster from "./pages/admin/AdminRoster";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminEvents from "./pages/admin/AdminEvents";
 import AdminEggs from "./pages/admin/AdminEggs";
+import AdminGenerate from "./pages/admin/AdminGenerate";
 import AgentProfile from "./pages/AgentProfile";
 import ProcessPage from "./pages/ProcessPage"; // <--- NEW
 import ClientsPage from "./pages/ClientsPage";
@@ -126,6 +127,11 @@ function App() {
           <Route path="/admin/events" element={
             <PrivateRoute requireAdmin>
               <AdminEvents />
+            </PrivateRoute>
+          } />
+          <Route path="/admin/generate" element={
+            <PrivateRoute requireAdmin>
+              <AdminGenerate />
             </PrivateRoute>
           } />
           <Route path="/admin/eggs" element={

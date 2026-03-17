@@ -122,6 +122,14 @@ service cloud.firestore {
       allow write: if isSignedIn(); // Ideally restrict to admins later
     }
 
+    match /mission_suggestions/{suggestionId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /mission_suggestion_feedback/{feedbackId} {
+      allow read, write: if isAdmin();
+    }
+
     match /daily_work_log_templates/{templateId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
