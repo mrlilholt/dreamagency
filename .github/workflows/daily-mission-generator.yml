@@ -1,0 +1,69 @@
+name: Daily Mission Generator
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish generated suggestions to Firestore"
+        required: false
+        default: false
+        type: boolean
+      target_date:
+        description: "Optional date override (YYYY-MM-DD)"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 11 * * 1-5"
+
+jobs:
+  generate-missions:
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_PROJECT_ID: dreamlabos
+      GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/.secrets/firebase-service-account.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve target date
+        id: vars
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.target_date }}" ]; then
+            echo "target_date=${{ github.event.inputs.target_date }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "target_date=$(TZ=America/New_York date +%F)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create service account file (manual publish runs only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.secrets"
+          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' > "$GOOGLE_APPLICATION_CREDENTIALS"
+
+      - name: Dry-run generate (scheduled default)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish != true }}
+        run: npm run missions:generate -- --date "${{ steps.vars.outputs.target_date }}"
+
+      - name: Generate + publish to Firestore (manual opt-in)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+        env:
+          MISSIONS_PUBLISH_TO_FIRESTORE: "1"
+        run: npm run missions:generate -- --date "${{ steps.vars.outputs.target_date }}"
+
+      - name: Upload generated artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-missions-${{ steps.vars.outputs.target_date }}
+          path: generated/daily-missions/${{ steps.vars.outputs.target_date }}/
+          if-no-files-found: warn
