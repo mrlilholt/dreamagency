@@ -55,6 +55,7 @@ for (const fileEntry of files) {
       instruction: mission.instruction || "",
       trend: mission.trend || "",
       archetype: mission.archetype || "",
+      difficulty: mission.difficulty || "easy",
       code_word: mission.code_word || "",
       reward_cash: Number(mission.reward_cash || 0),
       reward_xp: Number(mission.reward_xp || 0),

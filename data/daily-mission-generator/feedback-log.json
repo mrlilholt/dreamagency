@@ -78,6 +78,21 @@
       "title": "Hallway Wayfinding Campaign Sprint A",
       "trend": "Hallway Wayfinding",
       "archetype": "campaign concept"
+    },
+    {
+      "feedback_doc_id": "DOQKNejcqbls7HhtUW42",
+      "created_at": "2026-03-17T23:52:34.880Z",
+      "date": "2026-03-23",
+      "class_id": "8th_dream_elective",
+      "option": 1,
+      "sentiment": "liked",
+      "notes": "this would be good if we explained what the \"calm focus zone\" was supposed to do.",
+      "tags": [
+        "firestore_feedback"
+      ],
+      "title": "Calm Focus Zones Space Makeover A",
+      "trend": "Calm Focus Zones",
+      "archetype": "space makeover"
     }
   ],
   "global_context": {

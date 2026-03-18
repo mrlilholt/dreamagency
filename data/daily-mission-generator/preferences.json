@@ -3,53 +3,81 @@
     "reward_cash": 400,
     "reward_xp": 400
   },
+  "rewardByDifficulty": {
+    "easy": { "reward_cash": 400, "reward_xp": 400 },
+    "medium": { "reward_cash": 550, "reward_xp": 550 },
+    "hard": { "reward_cash": 700, "reward_xp": 700 }
+  },
   "trendPool": [
-    "Calm Focus Zones",
-    "School Arrival Flow",
-    "Eco-Friendly Packaging",
-    "Peer Tutoring Systems",
-    "Creative Confidence Building",
-    "Club Recruitment Challenges",
-    "Library Navigation Upgrades",
-    "Hallway Wayfinding",
-    "Kindness Campaigns",
-    "Study Sprint Tools",
-    "Wellness Check-In Experiences",
-    "Lunch Line Improvements",
-    "Teamwork Rituals",
-    "Student Creator Showcases",
-    "Community Impact Micro-Projects"
+    "After-School Routine",
+    "Study Group Culture",
+    "Group Chat Etiquette",
+    "Creator Economy for Teens",
+    "Short-Form Video Storytelling",
+    "Digital Wellbeing",
+    "Safe Online Identity",
+    "Game Community Moderation",
+    "Esports Team Roles",
+    "Girls in STEM Confidence",
+    "Campus Navigation Stress",
+    "School Club Discovery",
+    "Project Showcase Culture",
+    "Student-led Tutorials",
+    "Peer Mentoring",
+    "Homework Focus Routines",
+    "AI Assistant Boundaries",
+    "Cyber Scam Awareness",
+    "Password Safety Habits",
+    "Collaboration Friction",
+    "First-Day Nerves",
+    "Lunch Flow Bottlenecks",
+    "Campus Event Planning",
+    "Student Travel Planning",
+    "Future Classroom Tech",
+    "Accessible Design for Teens",
+    "Healthy Competition",
+    "Self-Expression Through Design",
+    "School Spirit Campaigns",
+    "Community Kindness Moments"
   ],
   "globalLikes": [
-    "funny",
-    "visual",
-    "clear sketch target",
-    "problem-first framing",
-    "coding-informed mission framing",
+    "quick unique real-world challenge",
+    "clear user and problem",
+    "visual sketch-first output",
+    "constraints as puzzle",
     "student voice and agency",
-    "female sports references when sports are used"
+    "middle-school-girl relevance"
   ],
   "globalAvoids": [
     "essay-heavy",
-    "vague prompts"
+    "vague prompts",
+    "overly long setup",
+    "brand-first framing with no real user problem"
   ],
+  "missionFormat": {
+    "duration_minutes": "10-15",
+    "requires_user_problem_statement": true,
+    "requires_constraints": true,
+    "deliverable": "Sketch + simple diagram + short solution explanation"
+  },
   "classes": {
     "computer_science_quarter_4": {
       "fileKey": "computer-science",
       "name": "Computer Science Quarter 4",
-      "focus": "designing digital product experiences and systems",
+      "focus": "coding reasoning, game systems, cybersecurity, and AI product thinking",
+      "technical_depth": 3,
       "archetypes": [
-        "interface remix",
-        "feature launch",
-        "student safety flow",
-        "recommendation system",
-        "creator dashboard"
+        "creative ui overhaul",
+        "code debugging sprint",
+        "cybersecurity osint challenge",
+        "game system design",
+        "ai feature reasoning"
       ],
       "likes": [
-        "app screens",
         "clear user flow",
-        "notification ideas",
-        "coding principles in solution logic"
+        "technical reasoning",
+        "code-fix process clarity",
+        "ui-flow labeling"
       ],
       "avoid": [
         "open-ended branding only"
@@ -58,50 +86,52 @@
     "8th_dream_elective": {
       "fileKey": "dream-elective",
       "name": "8th Grade DREAM Elective",
-      "focus": "inventing playful experiences, products, and environments",
+      "focus": "object, space, experience, branding, empathy, and creative design process",
       "archetypes": [
-        "physical product remix",
-        "club pop-up",
-        "experience design",
-        "merch drop",
-        "space makeover"
+        "digital design concept",
+        "engineering space layout",
+        "school solution concept",
+        "object design remix",
+        "experience branding sprint"
       ],
       "likes": [
-        "bold objects",
-        "packaging",
-        "interactive spaces"
+        "bold visual concepts",
+        "fun constraints",
+        "mixed physical + digital sketching"
       ],
       "avoid": [
-        "too much text"
+        "text-heavy instructions"
       ]
     },
     "Interdisciplinary_design": {
       "fileKey": "interdisciplinary-design",
       "name": "8th Grade Interdisciplinary Design",
-      "focus": "solving real-world challenges through systems, storytelling, and visual design",
+      "focus": "systems thinking across social, technical, and real-life design contexts",
       "archetypes": [
-        "campaign concept",
-        "community challenge",
-        "service design",
-        "school system fix",
-        "awareness launch"
+        "systems thinking challenge",
+        "social media solution",
+        "travel solution",
+        "futuristic tech concept",
+        "personal utility concept"
       ],
       "likes": [
-        "school problems",
-        "social impact",
-        "poster-plus-product combos"
+        "interconnected disciplines",
+        "high novelty",
+        "solutions students would actually use"
       ],
       "avoid": [
-        "brand-only prompts with no problem to solve"
+        "research-heavy tasks",
+        "long writing requirements"
       ]
     }
   },
   "futureContext": {
-    "audience": "all-girls school",
+    "audience": "all-girls middle school",
     "tone": "onbrand_no_stereotypes",
     "rewardRange": {
       "min": 400,
       "max": 1000
-    }
+    },
+    "novelty": "high"
   }
 }

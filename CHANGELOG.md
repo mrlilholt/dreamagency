@@ -12,6 +12,7 @@ All notable changes to this project should be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Tuned mission generator to class-specific standards: 10-15 minute sketch sprints, explicit user/problem + constraints, high-novelty archetype sets per class, and difficulty-based reward variation (`data/daily-mission-generator/preferences.json`, `scripts/generateDailyMissions.mjs`, `scripts/publishMissionSuggestions.mjs`).
 - Added admin "Generate With AI" experience at `/admin/generate` with class-grouped mission suggestion history, date filtering, per-class pagination, feedback-note capture on like/dislike, and publish-to-live controls with class/date selection (`src/pages/admin/AdminGenerate.jsx`, `src/App.jsx`, `src/components/AdminShell.jsx`, `firestore.rules`).
 - Added a safe GitHub Actions automation workflow for daily mission generation with scheduled dry-run mode and manual publish opt-in, keeping Netlify deploy behavior unchanged (`.github/workflows/daily-mission-generator.yml`, `docs/daily-mission-generator.md`).
 - Added Firestore-to-local feedback sync (`missions:sync-feedback`) and automatic pre-generation feedback sync during publish-enabled runs so admin like/dislike notes influence subsequent mission generation (`scripts/syncMissionFeedback.mjs`, `scripts/generateDailyMissions.mjs`, `package.json`).
