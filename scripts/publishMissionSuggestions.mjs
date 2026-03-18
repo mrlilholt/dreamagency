@@ -63,17 +63,27 @@ for (const fileEntry of files) {
       source_date: targetDate,
       source: "daily-mission-creator",
       source_generated_at: summary.generated_at || new Date().toISOString(),
+      // Reset suggestion-level feedback/import state when content is regenerated
+      // so new options do not inherit prior run sentiment.
+      score: 0,
+      thumbs_up_count: 0,
+      thumbs_down_count: 0,
+      imported_count: 0,
+      imported_mission_ids: [],
+      last_feedback_sentiment: null,
+      last_feedback_by: null,
+      last_feedback_at: null,
       updatedAt: FieldValue.serverTimestamp()
     };
 
     if (!existingSnap.exists) {
       Object.assign(payload, {
         createdAt: FieldValue.serverTimestamp(),
-        score: 0,
-        thumbs_up_count: 0,
-        thumbs_down_count: 0,
-        imported_count: 0,
-        imported_mission_ids: []
+        published_count: 1
+      });
+    } else {
+      Object.assign(payload, {
+        published_count: FieldValue.increment(1)
       });
     }
 
