@@ -57,6 +57,18 @@ function launchDefaults(item) {
   };
 }
 
+function getFeedbackTag(item) {
+  const explicit = String(item?.last_feedback_sentiment || "").toLowerCase();
+  if (explicit === "up") return "liked";
+  if (explicit === "down") return "disliked";
+
+  const up = Number(item?.thumbs_up_count || 0);
+  const down = Number(item?.thumbs_down_count || 0);
+  if (up > 0 && down === 0) return "liked";
+  if (down > 0 && up === 0) return "disliked";
+  return "untagged";
+}
+
 function SuggestionCard({
   item,
   launchConfig,
@@ -153,6 +165,8 @@ export default function AdminGenerate() {
   const [publishingById, setPublishingById] = useState({});
   const [feedbackById, setFeedbackById] = useState({});
   const [statusMsg, setStatusMsg] = useState("");
+  const [tagViewByClass, setTagViewByClass] = useState({});
+  const [selectedTaggedByClass, setSelectedTaggedByClass] = useState({});
   const [feedbackDraft, setFeedbackDraft] = useState({
     open: false,
     item: null,
@@ -213,8 +227,23 @@ export default function AdminGenerate() {
 
     return sorted.reduce((acc, item) => {
       const classId = item.class_id || "unassigned";
-      if (!acc[classId]) acc[classId] = [];
-      acc[classId].push(item);
+      if (!acc[classId]) {
+        acc[classId] = {
+          untagged: [],
+          liked: [],
+          disliked: []
+        };
+      }
+
+      const tag = getFeedbackTag(item);
+      if (tag === "liked") {
+        acc[classId].liked.push(item);
+      } else if (tag === "disliked") {
+        acc[classId].disliked.push(item);
+      } else {
+        acc[classId].untagged.push(item);
+      }
+
       return acc;
     }, {});
   }, [items, selectedDate]);
@@ -294,6 +323,9 @@ export default function AdminGenerate() {
       await updateDoc(doc(db, "mission_suggestions", item.id), {
         [counterField]: increment(1),
         score: increment(scoreDelta),
+        last_feedback_sentiment: sentiment,
+        last_feedback_by: user.uid,
+        last_feedback_at: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
       setStatusMsg(`Saved ${sentiment === "up" ? "like" : "dislike"} feedback for "${item.title || "suggestion"}".`);
@@ -421,36 +453,145 @@ export default function AdminGenerate() {
           </section>
         ) : null}
 
-        {!loading && !error && classEntries.map(([classId, classItems]) => {
-          const totalPages = Math.max(1, Math.ceil(classItems.length / pageSize));
+        {!loading && !error && classEntries.map(([classId, classGroup]) => {
+          const untaggedItems = classGroup.untagged;
+          const likedItems = classGroup.liked;
+          const dislikedItems = classGroup.disliked;
+          const totalPages = Math.max(1, Math.ceil(untaggedItems.length / pageSize));
           const page = Math.min(pageByClass[classId] || 1, totalPages);
           const startIndex = (page - 1) * pageSize;
-          const pageItems = classItems.slice(startIndex, startIndex + pageSize);
+          const pageItems = untaggedItems.slice(startIndex, startIndex + pageSize);
+          const tagView = tagViewByClass[classId] || "none";
+          const tagItems = tagView === "liked" ? likedItems : tagView === "disliked" ? dislikedItems : [];
+          const selectedTaggedId = selectedTaggedByClass[classId] || "";
+          const selectedTaggedItem = tagItems.find((item) => item.id === selectedTaggedId) || tagItems[0] || null;
 
           return (
             <section key={classId} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-lg font-black text-slate-900 capitalize">{formatClassName(classId)}</h3>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{classItems.length} ideas</p>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                  {untaggedItems.length} untagged ideas
+                </p>
               </div>
 
-              <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                {pageItems.map((item) => (
-                  <SuggestionCard
-                    key={item.id}
-                    item={item}
-                    launchConfig={getLaunchConfig(item)}
-                    classChoices={classChoices}
-                    onLaunchChange={handleLaunchChange}
-                    onFeedback={openFeedbackPrompt}
-                    onPublish={handlePublish}
-                    busy={Boolean(publishingById[item.id])}
-                    feedbackBusy={Boolean(feedbackById[item.id])}
-                  />
-                ))}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => {
+                    const nextView = tagView === "liked" ? "none" : "liked";
+                    setTagViewByClass((prev) => ({
+                      ...prev,
+                      [classId]: nextView
+                    }));
+                    if (nextView === "liked") {
+                      setSelectedTaggedByClass((prev) => ({
+                        ...prev,
+                        [classId]: likedItems[0]?.id || ""
+                      }));
+                    }
+                  }}
+                  className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                    tagView === "liked"
+                      ? "border-emerald-300 bg-emerald-100 text-emerald-800"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  Liked ({likedItems.length})
+                </button>
+                <button
+                  onClick={() => {
+                    const nextView = tagView === "disliked" ? "none" : "disliked";
+                    setTagViewByClass((prev) => ({
+                      ...prev,
+                      [classId]: nextView
+                    }));
+                    if (nextView === "disliked") {
+                      setSelectedTaggedByClass((prev) => ({
+                        ...prev,
+                        [classId]: dislikedItems[0]?.id || ""
+                      }));
+                    }
+                  }}
+                  className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                    tagView === "disliked"
+                      ? "border-rose-300 bg-rose-100 text-rose-800"
+                      : "border-rose-200 bg-rose-50 text-rose-700"
+                  }`}
+                >
+                  Disliked ({dislikedItems.length})
+                </button>
               </div>
 
-              {totalPages > 1 ? (
+              {tagView !== "none" ? (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                    {tagView === "liked" ? "Liked ideas" : "Disliked ideas"}
+                  </p>
+                  {tagItems.length ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {tagItems.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setSelectedTaggedByClass((prev) => ({
+                              ...prev,
+                              [classId]: item.id
+                            }));
+                          }}
+                          className={`rounded-full border px-2 py-1 text-xs font-semibold ${
+                            tagView === "liked"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-rose-200 bg-rose-50 text-rose-700"
+                          } ${selectedTaggedItem?.id === item.id ? "ring-2 ring-indigo-300" : ""}`}
+                        >
+                          {item.title || "Untitled suggestion"}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-500">No tagged ideas in this bucket yet.</p>
+                  )}
+
+                  {selectedTaggedItem ? (
+                    <div className="mt-3">
+                      <SuggestionCard
+                        item={selectedTaggedItem}
+                        launchConfig={getLaunchConfig(selectedTaggedItem)}
+                        classChoices={classChoices}
+                        onLaunchChange={handleLaunchChange}
+                        onFeedback={openFeedbackPrompt}
+                        onPublish={handlePublish}
+                        busy={Boolean(publishingById[selectedTaggedItem.id])}
+                        feedbackBusy={Boolean(feedbackById[selectedTaggedItem.id])}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {pageItems.length ? (
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  {pageItems.map((item) => (
+                    <SuggestionCard
+                      key={item.id}
+                      item={item}
+                      launchConfig={getLaunchConfig(item)}
+                      classChoices={classChoices}
+                      onLaunchChange={handleLaunchChange}
+                      onFeedback={openFeedbackPrompt}
+                      onPublish={handlePublish}
+                      busy={Boolean(publishingById[item.id])}
+                      feedbackBusy={Boolean(feedbackById[item.id])}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  No untagged suggestions for this class and date filter.
+                </div>
+              )}
+
+              {pageItems.length > 0 && totalPages > 1 ? (
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold text-slate-500">
                     Page {page} of {totalPages}
