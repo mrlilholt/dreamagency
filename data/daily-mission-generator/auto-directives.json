@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-03-18T23:01:39.902Z",
+  "lookback_days": 120,
+  "considered_entries": 62,
+  "rules": {
+    "strip_option_suffix_from_titles": true,
+    "target_user_phrase": "a middle-school student in a school context",
+    "require_explicit_problem_statement": true,
+    "require_context_definition": true
+  },
+  "evidence": {
+    "remove_variant_mentions": 47,
+    "avoid_girl_phrase_mentions": 1,
+    "unclear_problem_mentions": 48
+  }
+}

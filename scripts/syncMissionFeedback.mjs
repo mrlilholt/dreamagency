@@ -5,6 +5,7 @@ import { getFirestore } from "firebase-admin/firestore";
 
 const ROOT_DIR = process.cwd();
 const FEEDBACK_PATH = path.join(ROOT_DIR, "data", "daily-mission-generator", "feedback-log.json");
+const DIRECTIVES_PATH = path.join(ROOT_DIR, "data", "daily-mission-generator", "auto-directives.json");
 const args = parseArgs(process.argv.slice(2));
 const lookbackDays = Number(args.days || 45);
 
@@ -68,6 +69,8 @@ const payload = {
 };
 
 fs.writeFileSync(FEEDBACK_PATH, `${JSON.stringify(payload, null, 2)}\n`);
+const directives = buildAutoDirectives(existingEntries);
+fs.writeFileSync(DIRECTIVES_PATH, `${JSON.stringify(directives, null, 2)}\n`);
 console.log(`Synced mission feedback from Firestore: imported ${imported}, total ${existingEntries.length}`);
 
 function initializeFirebase() {
@@ -198,6 +201,59 @@ function parseArgs(argv) {
 function readJsonSafe(filePath) {
   if (!fs.existsSync(filePath)) return { entries: [] };
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+function buildAutoDirectives(entries) {
+  const recentEntries = [...entries]
+    .filter((entry) => isRecent(entry.created_at, 120))
+    .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+
+  const criticalNotes = recentEntries
+    .filter((entry) => entry.sentiment === "avoid" || entry.sentiment === "pass")
+    .map((entry) => String(entry.notes || "").toLowerCase())
+    .filter(Boolean);
+
+  const removeVariantMentions = countMatches(criticalNotes, /\b(don't|dont|do not)[^.!?]{0,120}\b(a\/b|a or b|title)[^.!?]{0,120}\b/);
+  const avoidGirlPhraseMentions = countMatches(criticalNotes, /\b(don't|dont|do not)[^.!?]{0,120}\bmiddle-school girl\b/);
+  const unclearProblemMentions = countMatches(
+    criticalNotes,
+    /\b(doesn'?t explain the problem|does not explain the problem|problem isn'?t directly mentioned|not clearly defined|unclear what this is|not defined)\b/
+  );
+
+  return {
+    generated_at: new Date().toISOString(),
+    lookback_days: 120,
+    considered_entries: recentEntries.length,
+    rules: {
+      strip_option_suffix_from_titles: removeVariantMentions > 0,
+      target_user_phrase:
+        avoidGirlPhraseMentions > 0
+          ? "a middle-school student in a school context"
+          : "a middle-school girl in a school context",
+      require_explicit_problem_statement: unclearProblemMentions > 0,
+      require_context_definition: unclearProblemMentions > 0
+    },
+    evidence: {
+      remove_variant_mentions: removeVariantMentions,
+      avoid_girl_phrase_mentions: avoidGirlPhraseMentions,
+      unclear_problem_mentions: unclearProblemMentions
+    }
+  };
+}
+
+function isRecent(isoString, days) {
+  const ms = new Date(isoString || 0).getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return false;
+  const cutoffMs = Date.now() - (days * 24 * 60 * 60 * 1000);
+  return ms >= cutoffMs;
+}
+
+function countMatches(values, regex) {
+  let count = 0;
+  for (const value of values) {
+    if (regex.test(value)) count += 1;
+  }
+  return count;
 }
 
 function getLocalDateString() {

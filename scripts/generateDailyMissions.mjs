@@ -7,6 +7,7 @@ const DATA_DIR = path.join(ROOT_DIR, "data", "daily-mission-generator");
 const OUTPUT_DIR = path.join(ROOT_DIR, "generated", "daily-missions");
 const PREFERENCES_PATH = path.join(DATA_DIR, "preferences.json");
 const FEEDBACK_PATH = path.join(DATA_DIR, "feedback-log.json");
+const DIRECTIVES_PATH = path.join(DATA_DIR, "auto-directives.json");
 
 const args = parseArgs(process.argv.slice(2));
 const targetDate = args.date || getLocalDateString();
@@ -21,6 +22,8 @@ maybeSyncFeedbackFromFirestore({ args });
 const preferences = readJson(PREFERENCES_PATH);
 const feedbackLog = readJson(FEEDBACK_PATH);
 const feedbackEntries = Array.isArray(feedbackLog.entries) ? feedbackLog.entries : [];
+const autoDirectives = readJsonOptional(DIRECTIVES_PATH, {});
+const styleRules = normalizeStyleRules(autoDirectives.rules || {});
 
 const trendScores = buildTrendScores(preferences, feedbackEntries);
 const classFeedback = buildClassFeedback(feedbackEntries);
@@ -43,7 +46,8 @@ for (const [classId, classConfig] of Object.entries(preferences.classes || {})) 
     targetDate,
     optionsPerClass,
     trendScores,
-    classFeedback: classFeedback.get(classId) || defaultClassFeedback()
+    classFeedback: classFeedback.get(classId) || defaultClassFeedback(),
+    styleRules
   });
 
   const outputPath = path.join(outputDateDir, `${classConfig.fileKey}.json`);
@@ -79,7 +83,8 @@ function buildClassMissions({
   targetDate,
   optionsPerClass,
   trendScores,
-  classFeedback
+  classFeedback,
+  styleRules
 }) {
   const trendOffset = computeOffset(`${targetDate}:${classId}:trend`);
   const archetypeOffset = computeOffset(`${targetDate}:${classId}:archetype`);
@@ -110,7 +115,8 @@ function buildClassMissions({
         variant,
         rewardDefaults: preferences.rewardDefaults || {},
         rewardByDifficulty: preferences.rewardByDifficulty || {},
-        difficulty
+        difficulty,
+        styleRules
       })
     );
   }
@@ -127,9 +133,10 @@ function createMission({
   variant,
   rewardDefaults,
   rewardByDifficulty,
-  difficulty
+  difficulty,
+  styleRules
 }) {
-  const missionDetails = buildMissionDetails(classConfig, trend, archetype, variant);
+  const missionDetails = buildMissionDetails(classConfig, trend, archetype, variant, styleRules);
   const rewardProfile = rewardByDifficulty[difficulty] || rewardDefaults;
   return {
     title: missionDetails.title,
@@ -145,21 +152,21 @@ function createMission({
   };
 }
 
-function buildMissionDetails(classConfig, trend, archetype, variant) {
+function buildMissionDetails(classConfig, trend, archetype, variant, styleRules) {
   const className = classConfig.name;
 
   if (classConfig.fileKey === "computer-science") {
-    return buildComputerScienceMission(className, trend, archetype, variant);
+    return buildComputerScienceMission(className, trend, archetype, variant, styleRules);
   }
 
   if (classConfig.fileKey === "dream-elective") {
-    return buildDreamMission(className, trend, archetype, variant);
+    return buildDreamMission(className, trend, archetype, variant, styleRules);
   }
 
-  return buildInterdisciplinaryMission(className, trend, archetype, variant);
+  return buildInterdisciplinaryMission(className, trend, archetype, variant, styleRules);
 }
 
-function buildComputerScienceMission(className, trend, archetype, variant) {
+function buildComputerScienceMission(className, trend, archetype, variant, styleRules) {
   const titleMap = {
     "creative ui overhaul": `${trend} UI Overhaul`,
     "code debugging sprint": `${trend} Debug Sprint`,
@@ -187,15 +194,15 @@ function buildComputerScienceMission(className, trend, archetype, variant) {
   };
 
   return {
-    title: `${titleMap[archetype] || `${trend} Design Challenge`} ${variant}`,
+    title: formatMissionTitle(titleMap[archetype] || `${trend} Design Challenge`, variant, styleRules),
     instruction: withMissionFormat(
       instructionMap[archetype] || `Sketch a new ${trend} experience with a clear user flow, one key screen, and one improvement that helps middle school users.`,
-      { includeUiFlowRequirement: true }
+      { includeUiFlowRequirement: true, styleRules, trend }
     )
   };
 }
 
-function buildDreamMission(className, trend, archetype, variant) {
+function buildDreamMission(className, trend, archetype, variant, styleRules) {
   const titleMap = {
     "digital design concept": `${trend} Digital Concept Sprint`,
     "engineering space layout": `${trend} Space Layout Challenge`,
@@ -223,15 +230,15 @@ function buildDreamMission(className, trend, archetype, variant) {
   };
 
   return {
-    title: `${titleMap[archetype] || `${trend} Dream Challenge`} ${variant}`,
+    title: formatMissionTitle(titleMap[archetype] || `${trend} Dream Challenge`, variant, styleRules),
     instruction: withMissionFormat(
       instructionMap[archetype] || `Sketch a bold object, environment, or experience inspired by ${trend}, with labels showing what students would notice first.`,
-      { includeUiFlowRequirement: false }
+      { includeUiFlowRequirement: false, styleRules, trend }
     )
   };
 }
 
-function buildInterdisciplinaryMission(className, trend, archetype, variant) {
+function buildInterdisciplinaryMission(className, trend, archetype, variant, styleRules) {
   const titleMap = {
     "systems thinking challenge": `${trend} Systems Thinking Sprint`,
     "social media solution": `${trend} Social Solution Challenge`,
@@ -259,26 +266,39 @@ function buildInterdisciplinaryMission(className, trend, archetype, variant) {
   };
 
   return {
-    title: `${titleMap[archetype] || `${trend} Design Challenge`} ${variant}`,
+    title: formatMissionTitle(titleMap[archetype] || `${trend} Design Challenge`, variant, styleRules),
     instruction: withMissionFormat(
       instructionMap[archetype] || `Sketch a system, campaign, or service inspired by ${trend} that solves a real school problem and can be explained quickly from the drawing.`,
-      { includeUiFlowRequirement: false }
+      { includeUiFlowRequirement: false, styleRules, trend }
     )
   };
 }
 
-function withMissionFormat(baseInstruction, { includeUiFlowRequirement = false } = {}) {
+function withMissionFormat(baseInstruction, { includeUiFlowRequirement = false, styleRules, trend } = {}) {
   const pieces = [
     baseInstruction,
     "10-15 minute design sprint.",
-    "Target user: a middle-school girl in a school context.",
+    `Target user: ${styleRules.targetUserPhrase}.`,
     "Include in your sketch: (1) one-sentence user/problem statement, (2) at least two constraints, (3) a labeled diagram showing how your solution works."
   ];
+  if (styleRules.requireExplicitProblemStatement) {
+    pieces.push("Start by naming the exact problem in plain language (who is struggling, what is going wrong, and where).");
+  }
+  if (styleRules.requireContextDefinition) {
+    pieces.push(`If "${trend}" could be unclear, define it in one short sentence before sketching.`);
+  }
   if (includeUiFlowRequirement) {
     pieces.push("For UI-flow prompts, include two connected screens and labeled interaction steps.");
   }
   pieces.push("Keep writing minimal: quick labels and brief notes only.");
   return pieces.join(" ");
+}
+
+function formatMissionTitle(baseTitle, variant, styleRules) {
+  if (styleRules.stripOptionSuffixFromTitles) {
+    return baseTitle;
+  }
+  return `${baseTitle} ${variant}`;
 }
 
 function buildCodeWord(trend, archetype) {
@@ -465,6 +485,21 @@ function parseArgs(argv) {
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+function readJsonOptional(filePath, fallbackValue = {}) {
+  if (!fs.existsSync(filePath)) return fallbackValue;
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+function normalizeStyleRules(rawRules = {}) {
+  return {
+    stripOptionSuffixFromTitles: Boolean(rawRules.strip_option_suffix_from_titles),
+    targetUserPhrase:
+      String(rawRules.target_user_phrase || "").trim() || "a middle-school girl in a school context",
+    requireExplicitProblemStatement: Boolean(rawRules.require_explicit_problem_statement),
+    requireContextDefinition: Boolean(rawRules.require_context_definition)
+  };
 }
 
 function computeOffset(value) {
