@@ -219,6 +219,14 @@ function buildAutoDirectives(entries) {
     criticalNotes,
     /\b(doesn'?t explain the problem|does not explain the problem|problem isn'?t directly mentioned|not clearly defined|unclear what this is|not defined)\b/
   );
+  const avoidClassLeadMentions = countMatches(
+    criticalNotes,
+    /\b(don't|dont|do not)[^.!?]{0,160}\bstart[^.!?]{0,160}\bfor (8th grade dream elective|computer science quarter 4|8th grade interdisciplinary design)\b/
+  );
+  const noveltyMentions = countMatches(
+    criticalNotes,
+    /\b(repetitive|same|too similar|not different|not unique|more variety|vastly different)\b/
+  );
 
   return {
     generated_at: new Date().toISOString(),
@@ -230,13 +238,17 @@ function buildAutoDirectives(entries) {
         avoidGirlPhraseMentions > 0
           ? "a middle-school student in a school context"
           : "a middle-school girl in a school context",
+      avoid_class_name_opener: avoidClassLeadMentions > 0,
+      high_novelty_mode: true,
       require_explicit_problem_statement: unclearProblemMentions > 0,
       require_context_definition: unclearProblemMentions > 0
     },
     evidence: {
       remove_variant_mentions: removeVariantMentions,
       avoid_girl_phrase_mentions: avoidGirlPhraseMentions,
-      unclear_problem_mentions: unclearProblemMentions
+      unclear_problem_mentions: unclearProblemMentions,
+      avoid_class_lead_mentions: avoidClassLeadMentions,
+      novelty_mentions: noveltyMentions
     }
   };
 }
