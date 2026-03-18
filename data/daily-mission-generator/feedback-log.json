@@ -1,0 +1,96 @@
+{
+  "entries": [
+    {
+      "created_at": "2026-03-17T14:19:26.796Z",
+      "date": "2026-03-17",
+      "class_id": "computer_science_quarter_4",
+      "option": null,
+      "sentiment": "liked",
+      "notes": "Include coding principles in solving the mission (technical logic should be present).",
+      "tags": [
+        "coding_principles",
+        "technical_reasoning",
+        "future_guidance"
+      ],
+      "title": "Class-level guidance",
+      "trend": "",
+      "archetype": ""
+    },
+    {
+      "created_at": "2026-03-17T14:19:26.796Z",
+      "date": "2026-03-17",
+      "class_id": "8th_dream_elective",
+      "option": 2,
+      "sentiment": "loved",
+      "notes": "Option 2 preferred. Brand + packaging prompts tied to familiar apps (e.g., Duolingo) are strong.",
+      "tags": [
+        "option_2_preferred",
+        "packaging",
+        "brand_remix",
+        "familiar_app"
+      ],
+      "title": "Duolingo Merch Drop Concept B",
+      "trend": "Duolingo",
+      "archetype": "merch drop"
+    },
+    {
+      "created_at": "2026-03-17T14:19:26.796Z",
+      "date": "2026-03-17",
+      "class_id": "Interdisciplinary_design",
+      "option": 2,
+      "sentiment": "liked",
+      "notes": "Option 2 preferred. For sports trends in future, prefer female leagues (e.g., WNBA) instead of male-centric references.",
+      "tags": [
+        "option_2_preferred",
+        "female_sports",
+        "wnba_preferred"
+      ],
+      "title": "NBA tunnel fits Problem Solver B",
+      "trend": "NBA tunnel fits",
+      "archetype": "community challenge"
+    },
+    {
+      "feedback_doc_id": "2pF3rsArSBJvNLTzgWSF",
+      "created_at": "2026-03-17T22:30:39.317Z",
+      "date": "2026-03-22",
+      "class_id": "Interdisciplinary_design",
+      "option": 1,
+      "sentiment": "liked",
+      "notes": "",
+      "tags": [
+        "firestore_feedback"
+      ],
+      "title": "Hallway Wayfinding Campaign Sprint A",
+      "trend": "Hallway Wayfinding",
+      "archetype": "campaign concept"
+    },
+    {
+      "feedback_doc_id": "UX3gdGhwwaSSGj4ZJXLU",
+      "created_at": "2026-03-17T22:39:43.378Z",
+      "date": "2026-03-22",
+      "class_id": "Interdisciplinary_design",
+      "option": 1,
+      "sentiment": "liked",
+      "notes": "This one would be great but the problem wasn't clearly defined.  We would want to note the problem they are trying to solve (for this one, they are probably helping someone find their way through the hallways to find a specific room)",
+      "tags": [
+        "firestore_feedback"
+      ],
+      "title": "Hallway Wayfinding Campaign Sprint A",
+      "trend": "Hallway Wayfinding",
+      "archetype": "campaign concept"
+    }
+  ],
+  "global_context": {
+    "audience": "all-girls middle school",
+    "guidance": [
+      "Stay on-brand without stereotypes.",
+      "When using sports trends, prefer female leagues/references (e.g., WNBA)."
+    ],
+    "rewards": {
+      "reward_cash_min": 400,
+      "reward_cash_max": 1000,
+      "reward_xp_min": 400,
+      "reward_xp_max": 1000
+    }
+  }
+}

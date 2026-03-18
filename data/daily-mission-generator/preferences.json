@@ -1,0 +1,107 @@
+{
+  "rewardDefaults": {
+    "reward_cash": 400,
+    "reward_xp": 400
+  },
+  "trendPool": [
+    "Calm Focus Zones",
+    "School Arrival Flow",
+    "Eco-Friendly Packaging",
+    "Peer Tutoring Systems",
+    "Creative Confidence Building",
+    "Club Recruitment Challenges",
+    "Library Navigation Upgrades",
+    "Hallway Wayfinding",
+    "Kindness Campaigns",
+    "Study Sprint Tools",
+    "Wellness Check-In Experiences",
+    "Lunch Line Improvements",
+    "Teamwork Rituals",
+    "Student Creator Showcases",
+    "Community Impact Micro-Projects"
+  ],
+  "globalLikes": [
+    "funny",
+    "visual",
+    "clear sketch target",
+    "problem-first framing",
+    "coding-informed mission framing",
+    "student voice and agency",
+    "female sports references when sports are used"
+  ],
+  "globalAvoids": [
+    "essay-heavy",
+    "vague prompts"
+  ],
+  "classes": {
+    "computer_science_quarter_4": {
+      "fileKey": "computer-science",
+      "name": "Computer Science Quarter 4",
+      "focus": "designing digital product experiences and systems",
+      "archetypes": [
+        "interface remix",
+        "feature launch",
+        "student safety flow",
+        "recommendation system",
+        "creator dashboard"
+      ],
+      "likes": [
+        "app screens",
+        "clear user flow",
+        "notification ideas",
+        "coding principles in solution logic"
+      ],
+      "avoid": [
+        "open-ended branding only"
+      ]
+    },
+    "8th_dream_elective": {
+      "fileKey": "dream-elective",
+      "name": "8th Grade DREAM Elective",
+      "focus": "inventing playful experiences, products, and environments",
+      "archetypes": [
+        "physical product remix",
+        "club pop-up",
+        "experience design",
+        "merch drop",
+        "space makeover"
+      ],
+      "likes": [
+        "bold objects",
+        "packaging",
+        "interactive spaces"
+      ],
+      "avoid": [
+        "too much text"
+      ]
+    },
+    "Interdisciplinary_design": {
+      "fileKey": "interdisciplinary-design",
+      "name": "8th Grade Interdisciplinary Design",
+      "focus": "solving real-world challenges through systems, storytelling, and visual design",
+      "archetypes": [
+        "campaign concept",
+        "community challenge",
+        "service design",
+        "school system fix",
+        "awareness launch"
+      ],
+      "likes": [
+        "school problems",
+        "social impact",
+        "poster-plus-product combos"
+      ],
+      "avoid": [
+        "brand-only prompts with no problem to solve"
+      ]
+    }
+  },
+  "futureContext": {
+    "audience": "all-girls school",
+    "tone": "onbrand_no_stereotypes",
+    "rewardRange": {
+      "min": 400,
+      "max": 1000
+    }
+  }
+}
