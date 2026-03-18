@@ -34,6 +34,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Debug runner context
+        shell: bash
+        run: |
+          echo "ref=${GITHUB_REF}"
+          echo "sha=${GITHUB_SHA}"
+          git rev-parse --short HEAD
+          echo "package scripts:"
+          node -e "const p=require('./package.json'); console.log(p.scripts);"
+
+
       - name: Resolve target date
         id: vars
         shell: bash
