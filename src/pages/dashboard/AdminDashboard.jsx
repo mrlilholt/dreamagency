@@ -63,6 +63,10 @@ import {
     getPromptDateKey,
     normalizeScheduledDates
 } from "../../lib/workLogs";
+import {
+    getMissionFormatCopy,
+    normalizeMissionFormat
+} from "../../lib/dailyMissions";
 // --- ICON LIST (For Shop) ---
 const AVAILABLE_ICONS = [
     "life-buoy", "map-pin", "briefcase", "pen-tool", "clock", 
@@ -243,6 +247,7 @@ const [missions, setMissions] = useState([]);
   // Takes an old mission and puts it back in the form
   const handleRedeploy = (mission) => {
       setNewMission({
+          format_type: normalizeMissionFormat(mission.format_type),
           title: mission.title,
           instruction: mission.instruction,
           code_word: mission.code_word || "",
@@ -257,6 +262,7 @@ const [missions, setMissions] = useState([]);
 
   const handleDuplicateMission = (mission) => {
       setNewMission({
+          format_type: normalizeMissionFormat(mission.format_type),
           title: mission.title ? `${mission.title} (Copy)` : "",
           instruction: mission.instruction,
           code_word: mission.code_word || "",
@@ -269,6 +275,7 @@ const [missions, setMissions] = useState([]);
       setShowDailyMissions(true);
   };
   const [newMission, setNewMission] = useState({
+      format_type: "mission",
       title: "",
       instruction: "",
       code_word: "",
@@ -281,6 +288,7 @@ const [missions, setMissions] = useState([]);
   // 1. PREP THE FORM FOR EDITING
   const handleEditClick = (mission) => {
       setNewMission({
+          format_type: normalizeMissionFormat(mission.format_type),
           title: mission.title,
           instruction: mission.instruction,
           code_word: mission.code_word || "",
@@ -298,10 +306,14 @@ const [missions, setMissions] = useState([]);
 
       try {
           const missionRef = doc(db, "daily_missions", editingMissionId);
-          await updateDoc(missionRef, newMission);
+          await updateDoc(missionRef, {
+              ...newMission,
+              format_type: normalizeMissionFormat(newMission.format_type)
+          });
           
           // Reset Form
           setNewMission({
+              format_type: "mission",
               title: "", instruction: "", code_word: "", 
               reward_xp: 50, reward_cash: 100, 
               class_id: "Period 1", active_date: new Date().toISOString().split('T')[0]
@@ -316,6 +328,7 @@ const [missions, setMissions] = useState([]);
   // 3. CANCEL EDIT
   const handleCancelEdit = () => {
       setNewMission({
+          format_type: "mission",
           title: "", instruction: "", code_word: "", 
           reward_xp: 50, reward_cash: 100, 
           class_id: "Period 1", active_date: new Date().toISOString().split('T')[0]
@@ -409,6 +422,7 @@ const [missions, setMissions] = useState([]);
 
           await addDoc(collection(db, "daily_missions"), {
               ...newMission,
+              format_type: normalizeMissionFormat(newMission.format_type),
               class_id: targetClass,
               createdAt: serverTimestamp()
           });
@@ -426,6 +440,8 @@ const [missions, setMissions] = useState([]);
           await deleteDoc(doc(db, "daily_missions", id));
       }
   };
+
+  const missionFormCopy = getMissionFormatCopy(newMission.format_type);
 
   const scheduleWorkLogPrompts = async (templateId, formState) => {
       const scheduledDates = normalizeScheduledDates(formState.selected_dates);
@@ -3175,6 +3191,29 @@ const [missions, setMissions] = useState([]);
 
                         {/* FORM START */}
                         <form onSubmit={editingMissionId ? handleUpdateMission : handleCreateMission} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Format</label>
+                                <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+                                    {["mission", "incoming_email"].map((formatType) => {
+                                        const formatCopy = getMissionFormatCopy(formatType);
+                                        const selected = normalizeMissionFormat(newMission.format_type) === formatType;
+                                        return (
+                                            <button
+                                                key={formatType}
+                                                type="button"
+                                                onClick={() => setNewMission((prev) => ({ ...prev, format_type: formatType }))}
+                                                className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
+                                                    selected
+                                                        ? "bg-white text-slate-900 shadow-sm"
+                                                        : "text-slate-500 hover:text-slate-700"
+                                                }`}
+                                            >
+                                                {formatCopy.adminToggleLabel}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                             
                             {/* 1. Target Class & Date */}
                             <div className="grid grid-cols-2 gap-3">
@@ -3206,10 +3245,10 @@ const [missions, setMissions] = useState([]);
 
                             {/* 2. Mission Title */}
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Mission Title</label>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">{missionFormCopy.titleLabel}</label>
                                 <input 
                                     type="text" 
-                                    placeholder="e.g. Operation: Deep Freeze"
+                                    placeholder={missionFormCopy.titlePlaceholder}
                                     className="w-full p-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 placeholder:text-slate-300 focus:border-indigo-500 outline-none"
                                     value={newMission.title}
                                     onChange={e => setNewMission({...newMission, title: e.target.value})}
@@ -3218,10 +3257,10 @@ const [missions, setMissions] = useState([]);
 
                             {/* 3. Instructions */}
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Briefing / Instructions</label>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">{missionFormCopy.instructionLabel}</label>
                                 <textarea 
                                     rows="3"
-                                    placeholder="Describe the objective..."
+                                    placeholder={missionFormCopy.instructionPlaceholder}
                                     className="w-full p-2 rounded-lg border border-slate-300 text-sm text-slate-600 placeholder:text-slate-300 focus:border-indigo-500 outline-none resize-none"
                                     value={newMission.instruction}
                                     onChange={e => setNewMission({...newMission, instruction: e.target.value})}
@@ -3230,17 +3269,18 @@ const [missions, setMissions] = useState([]);
 
                             {/* 4. Code Word */}
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Secret Code (Optional)</label>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">{missionFormCopy.codeLabel}</label>
                                 <div className="relative">
                                     <input 
                                         type="text" 
-                                        placeholder="LEAVE BLANK FOR NONE"
+                                        placeholder={missionFormCopy.codePlaceholder}
                                         className="w-full pl-9 p-2 rounded-lg border border-slate-300 text-sm font-mono font-bold text-indigo-600 placeholder:text-slate-300 focus:border-indigo-500 outline-none uppercase"
                                         value={newMission.code_word}
                                         onChange={e => setNewMission({...newMission, code_word: e.target.value})}
                                     />
                                     <div className="absolute left-3 top-2.5 text-slate-400">#</div>
                                 </div>
+                                <p className="mt-1 text-[11px] text-slate-400">{missionFormCopy.codeHelper}</p>
                             </div>
 
                             {/* 5. Rewards */}
@@ -3277,7 +3317,7 @@ const [missions, setMissions] = useState([]);
                                 {editingMissionId ? (
                                     <><Pencil size={18} /> Save Changes</>
                                 ) : (
-                                    <><Rocket size={18} /> Deploy Mission</>
+                                    <><Rocket size={18} /> {missionFormCopy.submitLabel}</>
                                 )}
                             </button>
                         </form>
@@ -3317,7 +3357,9 @@ const [missions, setMissions] = useState([]);
                             )}
 
                             {/* MAPPING THE MISSIONS */}
-                            {(viewArchive ? archivedMissions : activeMissions).map(m => (
+                            {(viewArchive ? archivedMissions : activeMissions).map((m) => {
+                                const missionCopy = getMissionFormatCopy(m.format_type);
+                                return (
                                 <div key={m.id} className={`flex items-start gap-4 p-4 border rounded-xl shadow-sm transition group ${viewArchive ? 'bg-slate-50 border-slate-200 opacity-75' : 'bg-white border-slate-200 hover:border-indigo-300'}`}>
                                     
                                     {/* Date Badge */}
@@ -3332,6 +3374,9 @@ const [missions, setMissions] = useState([]);
 
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-100 uppercase tracking-wide">
+                                                {missionCopy.listBadge}
+                                            </span>
                                             <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-wide">
                                                 {m.class_id}
                                             </span>
@@ -3386,7 +3431,8 @@ const [missions, setMissions] = useState([]);
                                         </button>
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 </div>

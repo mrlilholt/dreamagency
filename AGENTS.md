@@ -112,6 +112,10 @@ Admin (private + admin role required):
 - `side_hustles/{sideHustleId}`
 - `side_hustle_jobs/{uid}_{sideHustleId}`
 
+`daily_missions/{missionId}` currently supports optional `format_type` values:
+- `mission` (default when missing)
+- `incoming_email`
+
 ### Security model to remember
 
 Source: `firestore.rules`.
@@ -121,6 +125,7 @@ Source: `firestore.rules`.
 - `users/{uid}` writes are now self-or-admin.
 - `admin_student_metrics/{metricId}` is admin-only and stores per-class manual productivity overrides for analytics reports.
 - Daily work log templates/prompts are admin-managed; student submissions live under `users/{uid}/work_logs/{promptId}` and are self-or-admin in rules.
+- Daily mission docs may omit `format_type`; treat missing values as the legacy/default `mission` format.
 - Some legacy collections remain permissive for current velocity.
 - If a feature should become admin-only, update both UI checks and `firestore.rules`.
 
@@ -156,6 +161,13 @@ Important enums in active logic:
 
 - `src/pages/dashboard/StudentDashboard.jsx`
 - `src/lib/eventUtils.js`
+- `src/lib/dailyMissions.js`
+
+### Daily mission / incoming email launcher
+
+- `src/pages/dashboard/AdminDashboard.jsx`
+- `src/pages/dashboard/StudentDashboard.jsx`
+- `src/lib/dailyMissions.js`
 
 ### Daily work log templates, prompt scheduling, student submissions, analytics view
 
@@ -165,6 +177,14 @@ Important enums in active logic:
 - `src/lib/adminAnalytics.js`
 - `src/lib/workLogs.js`
 - `firestore.rules`
+
+### Standalone daily mission generation
+
+- `scripts/generateDailyMissions.mjs`
+- `scripts/recordMissionFeedback.mjs`
+- `data/daily-mission-generator/preferences.json`
+- `data/daily-mission-generator/feedback-log.json`
+- `docs/daily-mission-generator.md`
 
 ### Contract lifecycle (create/edit/list/student detail)
 
@@ -280,6 +300,8 @@ If this breaks, check these files first:
   `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`, `firestore.rules`
 - Daily work log popup/history missing or scheduling wrong:
   `src/pages/dashboard/AdminDashboard.jsx`, `src/pages/dashboard/StudentDashboard.jsx`, `src/lib/workLogs.js`, `firestore.rules`
+- Standalone mission generator outputs feel stale or off-target:
+  `data/daily-mission-generator/preferences.json`, `data/daily-mission-generator/feedback-log.json`, `scripts/generateDailyMissions.mjs`
 - PWA install behavior/cache issues:
   `src/components/InstallBanner.jsx`, `public/service-worker.js`, `public/manifest.webmanifest`
 - Egg not appearing / wrong trigger / claim issue:
@@ -315,6 +337,7 @@ Use these keywords in tickets/prompts for fast navigation:
 - `ANALYTICS` -> `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`
 - `PRODUCTIVITY_REPORTS` -> `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`, `firestore.rules`
 - `DAILY_WORK_LOGS` -> `src/pages/dashboard/AdminDashboard.jsx`, `src/pages/dashboard/StudentDashboard.jsx`, `src/pages/admin/AdminAnalytics.jsx`, `src/lib/adminAnalytics.js`, `src/lib/workLogs.js`, `firestore.rules`
+- `DAILY_MISSION_GENERATOR` -> `scripts/generateDailyMissions.mjs`, `scripts/recordMissionFeedback.mjs`, `data/daily-mission-generator/preferences.json`, `data/daily-mission-generator/feedback-log.json`
 - `LEADERBOARD` -> `src/pages/Leaderboard.jsx`
 - `THEME_SYSTEM` -> `src/context/ThemeContext.jsx`, `src/lib/themeConfig.js`, `src/index.css`
 - `PWA` -> `src/main.jsx`, `src/components/InstallBanner.jsx`, `public/service-worker.js`, `public/manifest.webmanifest`

@@ -32,7 +32,10 @@ import {
   Star, 
   X,
   Key,
-  Sparkles
+  Sparkles,
+  Mail,
+  Send,
+  ShieldCheck
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
@@ -56,6 +59,10 @@ import {
   normalizeWorkLogEntries,
   promptMatchesClasses
 } from "../../lib/workLogs";
+import {
+  getMissionFormatCopy,
+  normalizeMissionFormat
+} from "../../lib/dailyMissions";
 
 const GLOBAL_CLASS_IDS = new Set(["all", "global", "all_classes", "all_class"]);
 
@@ -474,7 +481,7 @@ export default function StudentDashboard() {
     setWorkLogForm({
       entries: [buildBlankWorkLogEntry()]
     });
-  }, [activeWorkLogPrompt?.id]);
+  }, [activeWorkLogPrompt]);
 
   // 2. CHECK FOR DAILY MISSIONS (The Intercept)
   useEffect(() => {
@@ -506,7 +513,10 @@ export default function StudentDashboard() {
               const alreadyDone = stats.completed_missions.includes(validMission.id);
               
               if (!alreadyDone) {
-                  setDailyMission(validMission);
+                  setDailyMission({
+                    ...validMission,
+                    format_type: normalizeMissionFormat(validMission.format_type)
+                  });
                   setShowMissionModal(true); // <--- TRIGGER THE POPUP
               }
           }
@@ -620,7 +630,7 @@ export default function StudentDashboard() {
       // 1. Check Password (If mission has one)
       if (dailyMission.code_word) {
           if (missionCode.toUpperCase().trim() !== dailyMission.code_word.toUpperCase()) {
-              setMissionError("INCORRECT PASSCODE.");
+              setMissionError(missionUi.incorrectCodeMessage);
               return;
           }
       }
@@ -846,6 +856,8 @@ export default function StudentDashboard() {
     if (status === "archived") return "Archived";
     return "Side Hustle";
   };
+  const missionUi = getMissionFormatCopy(dailyMission?.format_type);
+  const isEmailMission = normalizeMissionFormat(dailyMission?.format_type) === "incoming_email";
 
   return (
     <div className="min-h-screen theme-bg pb-20">
@@ -1319,92 +1331,186 @@ export default function StudentDashboard() {
       {/* --- TOP SECRET MISSION POPUP --- */}
       {showMissionModal && dailyMission && (
         <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
-            
-            {/* MANILA FOLDER UI */}
-            <div className="bg-[#fdf6e3] w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-[80rem] max-h-[calc(100vh-1.5rem)] rounded-sm shadow-2xl overflow-hidden relative rotate-0 sm:rotate-1 border border-[#d1c7ad] flex flex-col">
-                
-                {/* Folder Tab */}
-                <div className="absolute top-0 left-0 bg-[#e6dcc3] w-1/3 h-8 rounded-br-xl border-r border-b border-[#d1c7ad] flex items-center justify-center">
-                    <span className="text-[10px] font-black tracking-widest text-slate-500/50 uppercase">Confidential</span>
+          {isEmailMission ? (
+            <div className="w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-5xl max-h-[calc(100vh-1.5rem)] rounded-[28px] shadow-2xl overflow-hidden border border-slate-300 bg-[#f5f7fb] flex flex-col">
+              <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-[#e9edf3] px-5 py-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-slate-700">
+                    <Mail size={16} className="shrink-0" />
+                    <span className="text-lg font-black">Personal draft</span>
+                    <span className="text-sm text-slate-500">Only visible to you</span>
+                  </div>
                 </div>
-
-                {/* "Classified" Stamp */}
-                <div className="absolute top-6 right-6 border-4 border-red-600/20 text-red-600/20 font-black text-4xl uppercase -rotate-12 px-4 py-2 pointer-events-none select-none">
-                    Classified
-                </div>
-
-                {/* Close Button (In case they want to ignore it) */}
-                <button 
+                <div className="flex items-center gap-3">
+                  <span className="hidden sm:inline-flex rounded-full bg-blue-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] text-blue-700">
+                    {missionUi.studentBadge}
+                  </span>
+                  <button 
                     onClick={() => setShowMissionModal(false)}
-                    className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 z-20"
-                >
-                    <X size={20} />
-                </button>
-
-                <div className="p-5 sm:p-8 pt-12 overflow-y-auto">
-                    
-                    {/* Header */}
-                    <div className="text-center mb-6">
-                        <div className="inline-flex items-center gap-2 bg-slate-900 text-white px-3 py-1 rounded text-xs font-bold uppercase tracking-wider mb-2">
-                            <Zap size={12} className="text-yellow-400"/> Priority Message
-                        </div>
-                        <h2 className="text-2xl font-black text-slate-800 uppercase leading-none mb-1">
-                            {dailyMission.title}
-                        </h2>
-                        <p className="text-xs font-mono text-slate-500 uppercase tracking-widest">
-                            Target: {dailyMission.class_id} // {dailyMission.active_date}
-                        </p>
-                    </div>
-
-                    {/* Instructions */}
-                    <div className="bg-white p-4 sm:p-6 border-2 border-slate-200 border-dashed rounded-xl mb-6 font-mono text-[clamp(0.9rem,1.05vw,1.1rem)] text-slate-700 leading-relaxed shadow-inner max-h-[45vh] overflow-y-auto break-words">
-                        {dailyMission.instruction}
-                    </div>
-
-                    {/* Rewards */}
-                    <div className="flex justify-center gap-4 mb-6">
-                        <div className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold flex items-center gap-2 border border-green-200">
-                            <DollarSign size={18} /> ${dailyMission.reward_cash}
-                        </div>
-                        <div className="bg-indigo-100 text-indigo-800 px-4 py-2 rounded-lg font-bold flex items-center gap-2 border border-indigo-200">
-                            <Star size={18} /> {dailyMission.reward_xp} XP
-                        </div>
-                    </div>
-
-                    {/* Interaction Area */}
-                    <form onSubmit={handleClaimMission}>
-                        {dailyMission.code_word && (
-                            <div className="mb-4">
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 text-center">
-                                    Input Security Code
-                                </label>
-                                <input 
-                                    type="text" 
-                                    placeholder="ENTER CODE WORD..."
-                                    className="w-full bg-slate-800 text-green-400 font-mono text-center p-3 rounded-lg border-2 border-slate-700 focus:border-green-500 outline-none uppercase tracking-widest placeholder:text-slate-600 transition-colors"
-                                    value={missionCode}
-                                    onChange={e => setMissionCode(e.target.value)}
-                                    autoFocus
-                                />
-                            </div>
-                        )}
-
-                        {missionError && (
-                            <p className="text-center text-red-600 font-bold text-sm mb-4 animate-pulse">
-                                ⚠️ {missionError}
-                            </p>
-                        )}
-
-                        <button 
-                            type="submit"
-                            className="w-full bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:shadow-xl transition flex items-center justify-center gap-2"
-                        >
-                            <Unlock size={18} /> CLAIM REWARD
-                        </button>
-                    </form>
-
+                    className="text-slate-500 hover:text-slate-800"
+                  >
+                    <X size={22} />
+                  </button>
                 </div>
+              </div>
+
+              <div className="overflow-y-auto bg-white">
+                <div className="border-b border-slate-200 px-5 py-4 text-sm text-slate-700">
+                  <div className="flex items-start gap-3">
+                    <span className="w-16 shrink-0 text-slate-400">From:</span>
+                    <span className="rounded-md bg-blue-100 px-2 py-1 font-medium text-blue-900">missioncontrol@dreamagency.school</span>
+                  </div>
+                </div>
+
+                <div className="border-b border-slate-200 px-5 py-4 text-sm text-slate-700">
+                  <div className="flex items-start gap-3">
+                    <span className="w-16 shrink-0 text-slate-400">To:</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-slate-800">{dailyMission.class_id}</div>
+                      <div className="mt-1 text-xs text-slate-400">Scheduled for {dailyMission.active_date}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-slate-200 px-5 py-4 text-sm text-slate-700">
+                  <div className="flex items-start gap-3">
+                    <span className="w-16 shrink-0 text-slate-400">Subject:</span>
+                    <span className="font-medium text-slate-900">{dailyMission.title}</span>
+                  </div>
+                </div>
+
+                <div className="min-h-[300px] px-5 py-6 sm:px-6 sm:py-7">
+                  <div className="max-w-none text-[15px] leading-7 text-slate-700 whitespace-pre-wrap break-words">
+                    {dailyMission.instruction}
+                  </div>
+
+                  <div className="mt-10 space-y-3 text-slate-700">
+                    <div>Thanks,</div>
+                    <div className="font-semibold text-slate-900">Mission Control</div>
+                    <div className="text-sm text-slate-500">Sent from Dream Agency</div>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleClaimMission} className="border-t border-slate-200 bg-[#f8fafc] px-4 py-4 sm:px-5">
+                <div className="flex flex-wrap items-center gap-2 pb-3">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
+                    <DollarSign size={14} /> ${dailyMission.reward_cash}
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-800">
+                    <Star size={14} /> {dailyMission.reward_xp} XP
+                  </span>
+                </div>
+
+                {dailyMission.code_word && (
+                  <div className="rounded-2xl border border-slate-300 bg-white px-4 py-3 shadow-sm">
+                    <label className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                      <ShieldCheck size={14} />
+                      {missionUi.studentCodeLabel}
+                    </label>
+                    <input 
+                      type="text" 
+                      placeholder={missionUi.studentCodePlaceholder}
+                      className="w-full border-0 bg-transparent px-0 py-1 text-sm font-mono font-bold text-slate-800 outline-none uppercase tracking-[0.16em] placeholder:text-slate-400"
+                      value={missionCode}
+                      onChange={e => setMissionCode(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                )}
+
+                {missionError && (
+                  <p className="mt-3 text-sm font-bold text-red-600">
+                    {missionError}
+                  </p>
+                )}
+
+                <div className="mt-4 flex items-center justify-end">
+                  <button 
+                    type="submit"
+                    className="inline-flex min-w-[220px] items-center justify-center gap-2 rounded-full bg-slate-300 px-5 py-3 text-base font-bold text-slate-700 transition hover:bg-slate-800 hover:text-white"
+                  >
+                    <Send size={18} /> {missionUi.studentButtonLabel}
+                  </button>
+                </div>
+              </form>
             </div>
+          ) : (
+            <div className="bg-[#fdf6e3] w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-[80rem] max-h-[calc(100vh-1.5rem)] rounded-sm shadow-2xl overflow-hidden relative rotate-0 sm:rotate-1 border border-[#d1c7ad] flex flex-col">
+              <div className="absolute top-0 left-0 bg-[#e6dcc3] w-1/3 h-8 rounded-br-xl border-r border-b border-[#d1c7ad] flex items-center justify-center">
+                <span className="text-[10px] font-black tracking-widest text-slate-500/50 uppercase">Confidential</span>
+              </div>
+
+              <div className="absolute top-6 right-6 border-4 border-red-600/20 text-red-600/20 font-black text-4xl uppercase -rotate-12 px-4 py-2 pointer-events-none select-none">
+                Classified
+              </div>
+
+              <button 
+                onClick={() => setShowMissionModal(false)}
+                className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 z-20"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="p-5 sm:p-8 pt-12 overflow-y-auto">
+                <div className="text-center mb-6">
+                  <div className="inline-flex items-center gap-2 bg-slate-900 text-white px-3 py-1 rounded text-xs font-bold uppercase tracking-wider mb-2">
+                    <Zap size={12} className="text-yellow-400"/> {missionUi.studentBadge}
+                  </div>
+                  <h2 className="text-2xl font-black text-slate-800 uppercase leading-none mb-1">
+                    {dailyMission.title}
+                  </h2>
+                  <p className="text-xs font-mono text-slate-500 uppercase tracking-widest">
+                    Target: {dailyMission.class_id} // {dailyMission.active_date}
+                  </p>
+                </div>
+
+                <div className="bg-white p-4 sm:p-6 border-2 border-slate-200 border-dashed rounded-xl mb-6 font-mono text-[clamp(0.9rem,1.05vw,1.1rem)] text-slate-700 leading-relaxed shadow-inner max-h-[45vh] overflow-y-auto break-words">
+                  {dailyMission.instruction}
+                </div>
+
+                <div className="flex justify-center gap-4 mb-6">
+                  <div className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold flex items-center gap-2 border border-green-200">
+                    <DollarSign size={18} /> ${dailyMission.reward_cash}
+                  </div>
+                  <div className="bg-indigo-100 text-indigo-800 px-4 py-2 rounded-lg font-bold flex items-center gap-2 border border-indigo-200">
+                    <Star size={18} /> {dailyMission.reward_xp} XP
+                  </div>
+                </div>
+
+                <form onSubmit={handleClaimMission}>
+                  {dailyMission.code_word && (
+                    <div className="mb-4">
+                      <label className="block text-xs font-bold text-slate-400 uppercase mb-1 text-center">
+                        {missionUi.studentCodeLabel}
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder={missionUi.studentCodePlaceholder}
+                        className="w-full bg-slate-800 text-green-400 font-mono text-center p-3 rounded-lg border-2 border-slate-700 focus:border-green-500 outline-none uppercase tracking-widest placeholder:text-slate-600 transition-colors"
+                        value={missionCode}
+                        onChange={e => setMissionCode(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                  )}
+
+                  {missionError && (
+                    <p className="text-center text-red-600 font-bold text-sm mb-4 animate-pulse">
+                      ⚠️ {missionError}
+                    </p>
+                  )}
+
+                  <button 
+                    type="submit"
+                    className="w-full bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:shadow-xl transition flex items-center justify-center gap-2"
+                  >
+                    <Unlock size={18} /> {missionUi.studentButtonLabel}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

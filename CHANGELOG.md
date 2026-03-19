@@ -12,6 +12,7 @@ All notable changes to this project should be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Added backward-compatible `incoming_email` mode for `daily_missions`, including an admin format toggle in Mission Control, shared mission-format helpers, and a student popup that renders email-style requests while legacy missions keep their existing classified briefing UI (`src/pages/dashboard/AdminDashboard.jsx`, `src/pages/dashboard/StudentDashboard.jsx`, `src/lib/dailyMissions.js`, `AGENTS.md`).
 - Tuned mission generator to class-specific standards: 10-15 minute sketch sprints, explicit user/problem + constraints, high-novelty archetype sets per class, and difficulty-based reward variation (`data/daily-mission-generator/preferences.json`, `scripts/generateDailyMissions.mjs`, `scripts/publishMissionSuggestions.mjs`).
 - Added admin "Generate With AI" experience at `/admin/generate` with class-grouped mission suggestion history, date filtering, per-class pagination, feedback-note capture on like/dislike, and publish-to-live controls with class/date selection (`src/pages/admin/AdminGenerate.jsx`, `src/App.jsx`, `src/components/AdminShell.jsx`, `firestore.rules`).
 - Updated `/admin/generate` so `Liked`/`Disliked` pill items are clickable and open full actionable mission cards, while the default list stays focused on untagged items (`src/pages/admin/AdminGenerate.jsx`).
