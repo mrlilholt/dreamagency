@@ -327,22 +327,22 @@ function sanitizeClassLead(text) {
 function buildContextLine({ trend, archetype, classProfile, styleRules }) {
   const contextPools = {
     "computer-science": [
-      `Context: a student product team is pitching a ${trend}-inspired digital feature for real school use.`,
-      `Context: your class is acting as a rapid-response dev squad solving a ${trend} challenge for students.`,
-      `Context: a real app used by teens needs a safer, smarter ${trend} workflow.`
+      `Scenario: You are a student software designer hired by a youth-tech startup. They need a ${trend} digital solution with clear features students can sketch and explain.`,
+      `Scenario: You are on a school hackathon dev team. A partner app has a ${trend} problem and asked your team to redesign or debug the flow.`,
+      `Scenario: You are a product intern helping a real student app launch a safer ${trend} feature. Your task is to sketch what users see and how it works.`
     ],
     "dream-elective": [
-      `Context: a youth-facing creative studio wants a bold ${trend} concept that feels current and useful.`,
-      `Context: imagine your school launches a mini innovation expo and needs a standout ${trend} concept.`,
-      `Context: a future-school design lab asks for a fresh ${trend} idea with visual wow-factor.`
+      `Scenario: You are hired by a creative studio to invent a ${trend} concept that feels cool now and believable in the near future.`,
+      `Scenario: You are the lead designer for a youth brand challenge. They want a ${trend} concept students would actually want to use or wear.`,
+      `Scenario: You are pitching at a future-design showcase. Your team must deliver a bold ${trend} idea that solves a real need with strong visuals.`
     ],
     "interdisciplinary-design": [
-      `Context: a school-community problem connected to ${trend} needs a cross-discipline solution.`,
-      `Context: a city + school partnership is tackling ${trend} and needs systems-level redesign ideas.`,
-      `Context: a student advisory board is solving a ${trend} issue that touches people, process, and technology.`
+      `Scenario: You are part of a student innovation agency asked to solve a ${trend} problem using multiple disciplines together.`,
+      `Scenario: You are advising a city-school partnership tackling ${trend}. Your design must combine systems thinking, design, and practical implementation.`,
+      `Scenario: You are on a cross-functional team (design + engineering + communication) solving a real ${trend} challenge for students.`
     ],
     general: [
-      `Context: build a practical design response inspired by ${trend}.`
+      `Scenario: You are a student designer solving a ${trend} challenge.`
     ]
   };
   const pool = contextPools[classProfile] || contextPools.general;
