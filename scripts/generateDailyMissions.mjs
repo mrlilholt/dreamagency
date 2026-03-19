@@ -290,64 +290,159 @@ function withMissionFormat(baseInstruction, {
   const cleanedBaseInstruction = styleRules.avoidClassNameOpener
     ? sanitizeClassLead(baseInstruction)
     : baseInstruction;
-  const contextLine = buildContextLine({ trend, archetype, classProfile, styleRules });
-  const pieces = [
-    contextLine,
-    cleanedBaseInstruction,
-    "10-15 minute design sprint.",
-    `Target user: ${styleRules.targetUserPhrase}.`,
-    "Include in your sketch: (1) one-sentence user/problem statement, (2) at least two constraints, (3) a labeled diagram showing how your solution works."
-  ];
-  if (classProfile === "computer-science") {
-    pieces.push("Keep the solution CS-focused: digital workflow, app behavior, or code-level fix.");
-  }
-  if (classProfile === "interdisciplinary-design") {
-    pieces.push("Use at least two disciplines together (for example: design + engineering, policy + UX, or media + technology).");
-  }
-  if (classProfile === "dream-elective") {
-    pieces.push("Push creativity: blend one real-world need with one near-future idea.");
-  }
-  if (styleRules.requireExplicitProblemStatement) {
-    pieces.push("Start by naming the exact problem in plain language (who is struggling, what is going wrong, and where).");
-  }
-  if (styleRules.requireContextDefinition) {
-    pieces.push(`If "${trend}" could be unclear, define it in one short sentence before sketching.`);
-  }
-  if (includeUiFlowRequirement) {
-    pieces.push("For UI-flow prompts, include two connected screens and labeled interaction steps.");
-  }
-  pieces.push("Keep writing minimal: quick labels and brief notes only.");
-  return pieces.join(" ");
+  return buildEmailMissionRequest({
+    trend,
+    archetype,
+    classProfile,
+    styleRules,
+    includeUiFlowRequirement,
+    baseInstruction: cleanedBaseInstruction
+  });
 }
 
 function sanitizeClassLead(text) {
   return String(text || "").replace(/^For [^,]+,\s*/i, "");
 }
 
-function buildContextLine({ trend, archetype, classProfile, styleRules }) {
-  const contextPools = {
+function buildEmailMissionRequest({
+  trend,
+  archetype,
+  classProfile,
+  styleRules,
+  includeUiFlowRequirement,
+  baseInstruction
+}) {
+  const seed = `${trend}:${archetype}:${classProfile}`;
+  const opener = pickVariant([
+    "Hi Dream Agency Team,",
+    "Hello Design Crew,",
+    "Hey Team,"
+  ], `${seed}:opener`);
+  const requester = buildRequesterSignature({ trend, classProfile, seed });
+  const backgroundLine = pickVariant(buildBackgroundPool(classProfile, trend), `${seed}:background`);
+  const stakesLine = pickVariant(buildStakesPool(classProfile, trend), `${seed}:stakes`);
+  const askLead = pickVariant([
+    "Could you take this on today?",
+    "Could you design a fast concept for this?",
+    "Can you help us prototype a direction quickly?"
+  ], `${seed}:ask`);
+
+  const requirementLines = [
+    "Keep this to a 10-15 minute sprint and treat it like an early concept pitch.",
+    `Design for ${styleRules.targetUserPhrase}.`,
+    "In your sketch, include: a one-sentence user/problem statement, at least two constraints, and a labeled diagram of how the solution works."
+  ];
+
+  if (classProfile === "computer-science") {
+    requirementLines.push("Make sure the solution stays CS-focused: app behavior, digital workflow, or code-level debugging.");
+  }
+  if (classProfile === "interdisciplinary-design") {
+    requirementLines.push("Blend at least two disciplines to solve it (example: design + engineering, or media + systems planning).");
+  }
+  if (classProfile === "dream-elective") {
+    requirementLines.push("Push creative range: combine a real-world need with a cool near-future angle.");
+  }
+  if (styleRules.requireExplicitProblemStatement) {
+    requirementLines.push("Before sketching, clearly name who has the problem, what is failing, and where it is happening.");
+  }
+  if (styleRules.requireContextDefinition) {
+    requirementLines.push(`If any part of "${trend}" is ambiguous, define it in one short sentence first.`);
+  }
+  if (includeUiFlowRequirement) {
+    requirementLines.push("If your concept has a UI flow, sketch at least two connected screens and label user actions.");
+  }
+  requirementLines.push("Keep writing minimal. Focus on labels, layout, and the concept.");
+
+  const subject = `Subject: Design Request - ${formatMissionTitle(`${trend} ${archetype}`.replace(/\s+/g, " ").trim(), "", {
+    stripOptionSuffixFromTitles: true
+  })}`;
+
+  return [
+    subject,
+    opener,
+    requester,
+    backgroundLine,
+    stakesLine,
+    `${askLead} ${baseInstruction}`,
+    `What we need back: ${requirementLines.join(" ")}`
+  ].join("\n\n");
+}
+
+function buildRequesterSignature({ trend, classProfile, seed }) {
+  const profiles = {
     "computer-science": [
-      `Scenario: You are a student software designer hired by a youth-tech startup. They need a ${trend} digital solution with clear features students can sketch and explain.`,
-      `Scenario: You are on a school hackathon dev team. A partner app has a ${trend} problem and asked your team to redesign or debug the flow.`,
-      `Scenario: You are a product intern helping a real student app launch a safer ${trend} feature. Your task is to sketch what users see and how it works.`
+      `I'm writing from a student app product team working on ${trend}.`,
+      `I lead a youth-tech pilot and we're struggling with ${trend}.`,
+      `I'm a project manager for a school-facing digital platform focused on ${trend}.`
     ],
     "dream-elective": [
-      `Scenario: You are hired by a creative studio to invent a ${trend} concept that feels cool now and believable in the near future.`,
-      `Scenario: You are the lead designer for a youth brand challenge. They want a ${trend} concept students would actually want to use or wear.`,
-      `Scenario: You are pitching at a future-design showcase. Your team must deliver a bold ${trend} idea that solves a real need with strong visuals.`
+      `I'm the creative director of a youth design studio exploring ${trend}.`,
+      `I run a concept lab testing fresh student experiences around ${trend}.`,
+      `I'm coordinating a future-facing design challenge centered on ${trend}.`
     ],
     "interdisciplinary-design": [
-      `Scenario: You are part of a student innovation agency asked to solve a ${trend} problem using multiple disciplines together.`,
-      `Scenario: You are advising a city-school partnership tackling ${trend}. Your design must combine systems thinking, design, and practical implementation.`,
-      `Scenario: You are on a cross-functional team (design + engineering + communication) solving a real ${trend} challenge for students.`
+      `I'm part of a city-school innovation partnership dealing with ${trend}.`,
+      `I coordinate a cross-disciplinary team trying to improve ${trend}.`,
+      `I'm leading a systems-thinking initiative focused on ${trend}.`
     ],
     general: [
-      `Scenario: You are a student designer solving a ${trend} challenge.`
+      `I'm reaching out about a design challenge connected to ${trend}.`
     ]
   };
-  const pool = contextPools[classProfile] || contextPools.general;
-  const index = styleRules.highNoveltyMode ? computeOffset(`${trend}:${archetype}:${classProfile}`) % pool.length : 0;
-  return pool[index];
+  return pickVariant(profiles[classProfile] || profiles.general, `${seed}:requester`);
+}
+
+function buildBackgroundPool(classProfile, trend) {
+  const pools = {
+    "computer-science": [
+      `Students keep saying current digital tools feel confusing, especially when they try to use them independently.`,
+      `Usage data shows students are dropping off early because the product flow feels unclear or too heavy.`,
+      `Our current prototype handles the basics, but users still get stuck at key decision points.`
+    ],
+    "dream-elective": [
+      `The concept needs to feel culturally current and visually exciting, not like a generic school worksheet.`,
+      `Students respond best when the idea feels useful in real life and still a little futuristic.`,
+      `We need a concept that can stand out instantly through shape, experience, or visual identity.`
+    ],
+    "interdisciplinary-design": [
+      `This issue touches people, systems, and communication all at once, so a single-discipline fix has failed.`,
+      `Stakeholders want a practical concept that can work in school while still being scalable beyond it.`,
+      `The challenge includes social behavior + logistics + design, and right now those pieces are disconnected.`
+    ],
+    general: [
+      `This challenge needs a clear, practical design direction quickly.`
+    ]
+  };
+  return pools[classProfile] || pools.general;
+}
+
+function buildStakesPool(classProfile, trend) {
+  const pools = {
+    "computer-science": [
+      `If we solve this well, students get a safer and clearer digital experience they can actually trust.`,
+      `A stronger concept could prevent common user mistakes and make onboarding much faster.`,
+      `We need a solution that is simple enough to sketch now but realistic enough to build next.`
+    ],
+    "dream-elective": [
+      `If this lands, it becomes a signature concept students remember and want to share.`,
+      `A strong visual direction could turn this into a real campaign, product, or space prototype.`,
+      `The best concept will feel both practical and imaginative at the same time.`
+    ],
+    "interdisciplinary-design": [
+      `A strong concept should show how multiple disciplines connect into one coherent system.`,
+      `If we get this right, the solution can improve real student outcomes, not just presentation quality.`,
+      `We need something that balances human behavior, design logic, and implementation reality.`
+    ],
+    general: [
+      `We need a practical concept that can be explained clearly from the sketch.`
+    ]
+  };
+  return pools[classProfile] || pools.general;
+}
+
+function pickVariant(pool, key) {
+  if (!Array.isArray(pool) || pool.length === 0) return "";
+  return pool[computeOffset(key) % pool.length];
 }
 
 function pickFromPool(pool, index, step = 1) {
